@@ -8,9 +8,9 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue.js 3 CDN -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
   <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.469.0"></script>
   
   <script>
     tailwind.config = {
@@ -102,7 +102,7 @@
             <i data-lucide="building-2" class="w-8 h-8"></i>
           </div>
           <h1 class="text-2xl font-bold text-white tracking-wide">CondoSpace</h1>
-          <p class="text-xs text-slate-400">Condominio Primavera Ville</p>
+          <p class="text-xs text-slate-400">{{ condoName }}</p>
         </div>
 
         <div v-if="authAlert.text" :class="authAlert.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'" class="p-3 rounded-xl border text-xs font-medium text-center">
@@ -119,6 +119,10 @@
           <div>
             <label class="block text-slate-300 mb-1 font-medium">Senha</label>
             <input type="password" v-model="loginForm.password" required placeholder="••••••••" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all" />
+          </div>
+
+          <div class="text-right -mt-2">
+            <button type="button" @click="forgotPassword" class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">Esqueci minha senha</button>
           </div>
 
           <button type="submit" class="w-full py-3 bg-emerald-500 text-slate-950 font-bold text-sm rounded-xl hover:bg-emerald-400 neon-glow-green transition-all">
@@ -180,7 +184,7 @@
             </div>
             <div>
               <h1 class="font-bold text-xl tracking-wide text-white">CondoSpace</h1>
-              <p class="text-xs text-slate-400">Condominio Primavera Ville</p>
+              <p class="text-xs text-slate-400">{{ condoName }}</p>
             </div>
           </div>
 
@@ -315,6 +319,7 @@
                       <button @click="openGuestListModal(res)" class="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-lg border border-blue-500/30 inline-flex items-center gap-1">
                         <i data-lucide="users" class="w-3.5 h-3.5"></i> Convidados ({{ res.guests.length }})
                       </button>
+                      <button v-if="res.date >= todayStr()" @click="deleteReservation(res.id, true)" class="ml-2 text-xs px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/30 transition-colors">Cancelar</button>
                     </td>
                   </tr>
                   <tr v-if="myReservations.length === 0">
@@ -448,7 +453,7 @@
 
               <div>
                 <label class="block text-slate-300 mb-1 font-medium">Data do Evento</label>
-                <input type="date" v-model="adminBookingForm.date" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+                <input type="date" v-model="adminBookingForm.date" :min="todayStr()" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
               </div>
 
               <div>
@@ -512,7 +517,7 @@
                     <td class="p-3.5 text-slate-400">{{ user.email }}</td>
                     <td class="p-3.5 text-emerald-400">{{ user.unit || '-' }}</td>
                     <td class="p-3.5">
-                      <select v-model="user.role" class="bg-slate-900 border border-brand-border rounded px-2 py-1 text-xs">
+                      <select v-model="user.role" @change="changeRole(user)" :disabled="user.id === currentUser.id" class="bg-slate-900 border border-brand-border rounded px-2 py-1 text-xs">
                         <option value="resident">Morador</option>
                         <option value="doorman">Portaria</option>
                         <option value="admin">Admin</option>
@@ -520,7 +525,7 @@
                     </td>
                     <td class="p-3.5 text-right space-x-2">
                       <button v-if="user.status === 'Pendente'" @click="approveUser(user)" class="text-xs px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded">Aprovar</button>
-                      <button @click="openAdminResetPasswordModal(user)" class="text-xs px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded">Nova Senha</button>
+                      <button @click="sendPasswordReset(user)" class="text-xs px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded">Redefinir Senha</button>
                       <button v-if="user.id !== currentUser.id" @click="deleteUser(user)" class="text-xs px-2.5 py-1 bg-red-500/10 text-red-400 rounded">Excluir</button>
                     </td>
                   </tr>
@@ -594,7 +599,7 @@
           <form @submit.prevent="confirmReservation" class="space-y-4 text-xs">
             <div>
               <label class="block text-slate-300 mb-1 font-medium">1. Selecione a Data</label>
-              <input type="date" v-model="form.date" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+              <input type="date" v-model="form.date" :min="todayStr()" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
             </div>
 
             <!-- GRADE DE TURNOS DISPONÍVEIS E BLOQUEADOS -->
@@ -722,7 +727,7 @@
     <!-- SEÇÃO OCULTA EXCLUSIVA PARA IMPRESSÃO DA PORTARIA -->
     <div id="print-section" class="hidden">
       <div class="text-center border-b pb-4 mb-4">
-        <h1 class="text-2xl font-bold">CondoSpace - Condominio Primavera Ville</h1>
+        <h1 class="text-2xl font-bold">CondoSpace - {{ condoName }}</h1>
         <h2 class="text-lg font-semibold">Lista de Convidados da Portaria</h2>
       </div>
       <div class="mb-4 text-sm" v-if="printData">
@@ -755,7 +760,7 @@
     import {
       getAuth, onAuthStateChanged, signInWithEmailAndPassword,
       createUserWithEmailAndPassword, signOut,
-      reauthenticateWithCredential, EmailAuthProvider, updatePassword
+      reauthenticateWithCredential, EmailAuthProvider, updatePassword, sendPasswordResetEmail
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
       getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
@@ -771,12 +776,15 @@
       appId: "1:458674343880:web:0a113f3ae22f8d55157afd"
     };
 
+    // Configuração específica de cada condomínio (editar apenas este bloco e a firebaseConfig)
+    window.condoConfig = { name: 'Condominio Primavera Ville' };
+
     const app = initializeApp(firebaseConfig);
 
     window.fb = {
       auth: getAuth(app), db: getFirestore(app),
       onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
-      reauthenticateWithCredential, EmailAuthProvider, updatePassword,
+      reauthenticateWithCredential, EmailAuthProvider, updatePassword, sendPasswordResetEmail,
       collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot
     };
   </script>
@@ -817,6 +825,7 @@
           userList: [],
           unsubs: [],
           authLock: false,
+          condoName: window.condoConfig.name,
           authReady: false,
           passwordAlert: { text: '', type: '' },
           regulation: [
@@ -846,11 +855,12 @@
           return this.pendingUsersList.length;
         },
         filteredReservations() {
+          const today = this.todayStr();
           return this.reservations.filter(r => {
             let matchPeriod = true;
-            if (this.filters.period === 'today') matchPeriod = r.date === '2026-10-12';
-            else if (this.filters.period === 'month') matchPeriod = r.date.startsWith('2026-10');
-            else if (this.filters.period === 'year') matchPeriod = r.date.startsWith('2026');
+            if (this.filters.period === 'today') matchPeriod = r.date === today;
+            else if (this.filters.period === 'month') matchPeriod = r.date.startsWith(today.slice(0, 7));
+            else if (this.filters.period === 'year') matchPeriod = r.date.startsWith(today.slice(0, 4));
 
             let matchSpace = true;
             if (this.filters.space !== 'all') matchSpace = r.spaceName === this.filters.space;
@@ -945,14 +955,6 @@
           try {
             const snap = await fb.getDoc(fb.doc(fb.db, 'users', fbUser.uid));
             let profile = snap.exists() ? snap.data() : null;
-            // Usuário criado direto no console sem perfil: se não há nenhum perfil no sistema, vira administrador
-            if (!profile && (await fb.getDocs(fb.collection(fb.db, 'users'))).empty) {
-              profile = {
-                name: fbUser.displayName || fbUser.email.split('@')[0], email: fbUser.email, unit: '',
-                role: 'admin', status: 'Aprovado', createdAt: Date.now()
-              };
-              await fb.setDoc(fb.doc(fb.db, 'users', fbUser.uid), profile);
-            }
             if (!profile || profile.status === 'Pendente') {
               this.authAlert = {
                 text: profile ? 'Seu cadastro aguarda aprovação.' : 'Cadastro não encontrado.',
@@ -1008,21 +1010,14 @@
           try {
             const f = this.registerForm;
             const cred = await fb.createUserWithEmailAndPassword(fb.auth, f.email.trim(), f.password);
-            // O primeiro cadastro do sistema torna-se o administrador (já aprovado)
-            const isFirst = (await fb.getDocs(fb.collection(fb.db, 'users'))).empty;
             await fb.setDoc(fb.doc(fb.db, 'users', cred.user.uid), {
               name: f.name, email: f.email.trim(), unit: f.unit,
-              role: isFirst ? 'admin' : 'resident',
-              status: isFirst ? 'Aprovado' : 'Pendente',
-              createdAt: Date.now()
+              role: 'resident', status: 'Pendente', createdAt: Date.now()
             });
             await fb.signOut(fb.auth);
             this.registerForm = { name: '', unit: '', email: '', password: '' };
             this.authMode = 'login';
-            this.authAlert = {
-              text: isFirst ? 'Conta de administrador criada. Faça login.' : 'Solicitação registrada com sucesso!',
-              type: 'success'
-            };
+            this.authAlert = { text: 'Solicitação registrada com sucesso! Aguarde a aprovação da administração.', type: 'success' };
           } catch (e) {
             this.authAlert = { text: this.authError(e), type: 'error' };
           } finally {
@@ -1054,30 +1049,29 @@
             await fb.deleteDoc(fb.doc(fb.db, 'users', user.id));
           } catch (e) { this.fbError(e); }
         },
-        async deleteReservation(id) {
-          if (!confirm('Deseja excluir esta reserva em caso de desistência do morador?')) return;
+        async deleteReservation(id, own = false) {
+          const msg = own ? 'Deseja cancelar esta reserva?' : 'Deseja excluir esta reserva em caso de desistência do morador?';
+          if (!confirm(msg)) return;
           try {
             await fb.deleteDoc(fb.doc(fb.db, 'reservations', id));
           } catch (e) { this.fbError(e); }
         },
         async handleAdminCreateReservation() {
           const space = this.spaces.find(s => s.id === this.adminBookingForm.spaceId);
-          try {
-            await fb.addDoc(fb.collection(fb.db, 'reservations'), {
-              userId: 999,
-              residentName: this.adminBookingForm.residentName,
-              unit: this.adminBookingForm.unit,
-              spaceName: space.name,
-              date: this.adminBookingForm.date,
-              shift: this.adminBookingForm.shift,
-              fee: space.fee,
-              guests: [],
-              createdAt: Date.now()
-            });
-            alert('Reserva efetuada em nome do morador com sucesso!');
-            this.adminBookingForm = { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' };
-            this.adminTab = 'dashboard';
-          } catch (e) { this.fbError(e); }
+          const ok = await this.saveReservation({
+            userId: 999,
+            residentName: this.adminBookingForm.residentName,
+            unit: this.adminBookingForm.unit,
+            spaceName: space.name,
+            spaceId: space.id,
+            date: this.adminBookingForm.date,
+            shift: this.adminBookingForm.shift,
+            fee: space.fee
+          });
+          if (!ok) return;
+          alert('Reserva efetuada em nome do morador com sucesso!');
+          this.adminBookingForm = { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' };
+          this.adminTab = 'dashboard';
         },
         formatDate(dateStr) {
           if (!dateStr) return '';
@@ -1094,23 +1088,41 @@
           this.form.shift = '';
           this.showReservationModal = true;
         },
+        todayStr() {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        },
+        reservationId(spaceId, date, shift) {
+          return `${spaceId}_${date}_${shift.replace(/[^a-zA-Z0-9]+/g, '-')}`;
+        },
+        async saveReservation(data) {
+          const ref = fb.doc(fb.db, 'reservations', this.reservationId(data.spaceId, data.date, data.shift));
+          try {
+            await fb.setDoc(ref, { ...data, guests: [], createdAt: Date.now() });
+            return true;
+          } catch (e) {
+            console.error(e);
+            alert(e.code === 'permission-denied'
+              ? 'Não foi possível reservar: este turno já foi ocupado por outra pessoa. Escolha outro.'
+              : 'Erro ao salvar os dados. Tente novamente.');
+            return false;
+          }
+        },
         async confirmReservation() {
           if (!this.form.termsAccepted || !this.form.shift) return;
-          try {
-            await fb.addDoc(fb.collection(fb.db, 'reservations'), {
-              userId: this.currentUser.id,
-              residentName: this.currentUser.name,
-              unit: this.currentUser.unit || '',
-              spaceName: this.selectedSpace.name,
-              date: this.form.date,
-              shift: this.form.shift,
-              fee: this.selectedSpace.fee,
-              guests: [],
-              createdAt: Date.now()
-            });
-            this.showReservationModal = false;
-            this.form = { date: '', shift: '', termsAccepted: false };
-          } catch (e) { this.fbError(e); }
+          const ok = await this.saveReservation({
+            userId: this.currentUser.id,
+            residentName: this.currentUser.name,
+            unit: this.currentUser.unit || '',
+            spaceName: this.selectedSpace.name,
+            spaceId: this.selectedSpace.id,
+            date: this.form.date,
+            shift: this.form.shift,
+            fee: this.selectedSpace.fee
+          });
+          if (!ok) return;
+          this.showReservationModal = false;
+          this.form = { date: '', shift: '', termsAccepted: false };
         },
         openGuestListModal(res) {
           this.activeReservationForGuests = res;
@@ -1125,6 +1137,34 @@
               guests: [...(res.guests || []), { name }]
             });
             this.newGuestName = '';
+          } catch (e) { this.fbError(e); }
+        },
+        async forgotPassword() {
+          const email = this.loginForm.email.trim();
+          if (!email) {
+            this.authAlert = { text: 'Informe seu e-mail no campo acima para receber o link de redefinição.', type: 'error' };
+            return;
+          }
+          try {
+            await fb.sendPasswordResetEmail(fb.auth, email);
+          } catch (e) {
+            if (['auth/invalid-email', 'auth/network-request-failed', 'auth/too-many-requests'].includes(e.code)) {
+              this.authAlert = { text: this.authError(e), type: 'error' };
+              return;
+            }
+          }
+          this.authAlert = { text: 'Se o e-mail estiver cadastrado, enviamos o link para redefinir a senha.', type: 'success' };
+        },
+        async sendPasswordReset(user) {
+          if (!confirm(`Enviar link de redefinição de senha para ${user.email}?`)) return;
+          try {
+            await fb.sendPasswordResetEmail(fb.auth, user.email);
+            alert('Link de redefinição enviado para ' + user.email);
+          } catch (e) { this.fbError(e); }
+        },
+        async changeRole(user) {
+          try {
+            await fb.updateDoc(fb.doc(fb.db, 'users', user.id), { role: user.role });
           } catch (e) { this.fbError(e); }
         },
         async removeGuest(idx) {
