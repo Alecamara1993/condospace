@@ -56,21 +56,9 @@
       box-shadow: 0 0 15px rgba(0, 255, 135, 0.25);
     }
     @media print {
-      body * {
-        visibility: hidden;
-      }
-      #print-section, #print-section * {
-        visibility: visible;
-      }
-      #print-section {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        color: #000;
-        background: #fff;
-        padding: 20px;
-      }
+      body { background: #fff !important; }
+      #app > *:not(#print-section) { display: none !important; }
+      #print-section { display: block !important; color: #000; background: #fff; padding: 20px; }
     }
     ::-webkit-scrollbar {
       width: 6px;
@@ -444,7 +432,16 @@
             <form @submit.prevent="handleAdminCreateReservation" class="space-y-4 text-xs">
               <div>
                 <label class="block text-slate-300 mb-1 font-medium">Nome Completo do Morador</label>
-                <input type="text" v-model="adminBookingForm.residentName" required placeholder="Ex: João da Silva" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+                <div class="relative">
+                  <input type="text" v-model="adminBookingForm.residentName" @input="onResidentInput" @focus="residentListOpen = true" @blur="residentListOpen = false" required autocomplete="off" placeholder="Digite para buscar um morador cadastrado" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+                  <ul v-if="residentSuggestions.length" class="absolute z-20 mt-1 w-full bg-slate-900 border border-brand-border rounded-xl shadow-2xl overflow-hidden">
+                    <li v-for="u in residentSuggestions" :key="u.id" @mousedown.prevent="pickResident(u)" class="px-3.5 py-2.5 cursor-pointer hover:bg-slate-800 transition-colors">
+                      <span class="font-semibold text-white">{{ u.name }}</span>
+                      <span class="block text-[11px] text-slate-400">{{ u.unit || 'Sem unidade' }}</span>
+                    </li>
+                  </ul>
+                  <p class="text-[10px] text-slate-500 mt-1">Ao escolher um morador da lista, a reserva fica vinculada à conta dele.</p>
+                </div>
               </div>
 
               <div>
@@ -530,8 +527,19 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-slate-400 mb-1 font-medium">URL da Imagem / Foto</label>
-                    <input type="text" v-model="space.image" class="w-full bg-slate-950 border border-brand-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                    <label class="block text-slate-400 mb-1 font-medium">Foto do Espaço</label>
+                    <div class="flex items-center gap-3">
+                      <div class="w-16 h-16 rounded-xl overflow-hidden bg-slate-950 border border-brand-border flex-shrink-0">
+                        <img v-if="space.image" :src="space.image" alt="" class="w-full h-full object-cover" />
+                      </div>
+                      <div class="space-y-1">
+                        <label class="inline-block px-3 py-2 bg-slate-800 hover:bg-slate-700 text-blue-400 font-semibold rounded-xl border border-blue-500/30 cursor-pointer transition-colors">
+                          Escolher foto
+                          <input type="file" accept="image/*" class="hidden" @change="onSpaceImage($event, space)" />
+                        </label>
+                        <p class="text-[10px] text-slate-500">Clique em Salvar para aplicar.</p>
+                      </div>
+                    </div>
                   </div>
                   <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -555,7 +563,10 @@
 
           <!-- ABA 4: MORADORES -->
           <div v-if="adminTab === 'users'" class="glass-card p-6 rounded-2xl border border-brand-border space-y-4">
-            <h3 class="text-xl font-bold text-white">Gestão de Moradores e Usuários</h3>
+            <div class="flex flex-wrap justify-between items-center gap-3">
+              <h3 class="text-xl font-bold text-white">Gestão de Moradores e Usuários</h3>
+              <input type="text" v-model="userSearch" placeholder="Buscar por nome, e-mail ou unidade" class="w-full md:w-72 bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500 transition-colors" />
+            </div>
             <div class="overflow-x-auto">
               <table class="w-full text-left text-sm text-slate-300">
                 <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
@@ -568,7 +579,7 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-brand-border">
-                  <tr v-for="user in userList" :key="user.id" class="hover:bg-slate-800/30">
+                  <tr v-for="user in filteredUsers" :key="user.id" class="hover:bg-slate-800/30">
                     <td class="p-3.5 font-bold text-white">{{ user.name }}</td>
                     <td class="p-3.5 text-slate-400">{{ user.email }}</td>
                     <td class="p-3.5 text-emerald-400">{{ user.unit || '-' }}</td>
@@ -584,6 +595,9 @@
                       <button @click="sendPasswordReset(user)" class="text-xs px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded">Redefinir Senha</button>
                       <button v-if="user.id !== currentUser.id" @click="deleteUser(user)" class="text-xs px-2.5 py-1 bg-red-500/10 text-red-400 rounded">Excluir</button>
                     </td>
+                  </tr>
+                  <tr v-if="filteredUsers.length === 0">
+                    <td colspan="5" class="p-6 text-center text-slate-500">Nenhum morador encontrado.</td>
                   </tr>
                 </tbody>
               </table>
@@ -601,38 +615,86 @@
               <h2 class="text-2xl font-bold text-white flex items-center gap-2">
                 <i data-lucide="shield-check" class="w-6 h-6 text-brand-neonAmber"></i> Portaria - Painel de Controle
               </h2>
-              <p class="text-slate-400 text-sm mt-1">Consulte a agenda completa de áreas comuns e libere a entrada de convidados.</p>
+              <p class="text-slate-400 text-sm mt-1">Consulte a agenda das áreas comuns, a disponibilidade e as listas de convidados.</p>
             </div>
           </div>
 
-          <!-- AGENDA COMPLETA DO CONDOMÍNIO PARA A PORTARIA -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="glass-card p-5 rounded-2xl border-l-4 border-amber-500">
+              <p class="text-xs text-slate-400 uppercase font-semibold">Agendamentos no mês</p>
+              <p class="text-3xl font-bold text-white mt-1">{{ doormanStats.month }}</p>
+            </div>
+            <div class="glass-card p-5 rounded-2xl border-l-4 border-emerald-500">
+              <p class="text-xs text-slate-400 uppercase font-semibold">Agendamentos hoje</p>
+              <p class="text-3xl font-bold text-white mt-1">{{ doormanStats.today }}</p>
+            </div>
+            <div class="glass-card p-5 rounded-2xl border-l-4 border-blue-500">
+              <p class="text-xs text-slate-400 uppercase font-semibold">Próximos 7 dias</p>
+              <p class="text-3xl font-bold text-white mt-1">{{ doormanStats.week }}</p>
+            </div>
+          </div>
+
+          <div class="glass-card p-6 rounded-2xl space-y-4">
+            <div class="flex flex-wrap justify-between items-center gap-3">
+              <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i data-lucide="calendar-days" class="w-5 h-5 text-amber-400"></i> Agenda do Dia - {{ formatDate(doormanDate) }}
+              </h3>
+              <div class="flex items-center gap-2 text-xs">
+                <button @click="doormanDate = todayStr()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors">Hoje</button>
+                <input type="date" v-model="doormanDate" class="bg-slate-900 border border-brand-border rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 transition-colors" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div v-for="row in doormanAgenda" :key="row.space.id" class="p-4 bg-slate-900 rounded-2xl border border-brand-border space-y-3">
+                <h4 class="font-bold text-white text-sm">{{ row.space.name }}</h4>
+                <div v-for="sh in row.shifts" :key="sh.name" :class="sh.res ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'" class="p-3 rounded-xl border text-xs space-y-2">
+                  <div class="flex justify-between items-center gap-2">
+                    <span class="font-semibold text-slate-200">{{ sh.name }}</span>
+                    <span :class="sh.res ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'" class="px-2 py-0.5 rounded-full text-[11px] font-bold">{{ sh.res ? 'Ocupado' : 'Disponível' }}</span>
+                  </div>
+                  <template v-if="sh.res">
+                    <p class="text-slate-300">{{ sh.res.residentName }} ({{ sh.res.unit }})</p>
+                    <button @click="openGuestListModal(sh.res)" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg font-bold transition-colors">
+                      Convidados ({{ (sh.res.guests || []).length }}) / Imprimir
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <p v-if="doormanAgenda.length === 0" class="text-slate-500 text-xs md:col-span-3">Nenhum espaço cadastrado.</p>
+            </div>
+          </div>
+
           <div class="glass-card p-6 rounded-2xl space-y-4">
             <h3 class="text-lg font-bold text-white flex items-center gap-2">
-              <i data-lucide="calendar-days" class="w-5 h-5 text-amber-400"></i> Visão Geral da Agenda do Condomínio
+              <i data-lucide="calendar-days" class="w-5 h-5 text-amber-400"></i> Próximas Reservas
             </h3>
-            
             <div class="overflow-x-auto">
               <table class="w-full text-left text-sm text-slate-300">
                 <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
                   <tr>
                     <th class="p-3.5">Data do Evento</th>
-                    <th class="p-3.5">Espaço Comun</th>
+                    <th class="p-3.5">Espaço Comum</th>
                     <th class="p-3.5">Turno</th>
                     <th class="p-3.5">Morador Responsável</th>
-                    <th class="p-3.5 text-right">Ação Portaria</th>
+                    <th class="p-3.5 text-right">Convidados</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-brand-border">
-                  <tr v-for="res in reservations" :key="res.id" class="hover:bg-slate-800/30">
+                  <tr v-for="res in upcomingReservations" :key="res.id" class="hover:bg-slate-800/30">
                     <td class="p-3.5 font-bold text-white">{{ formatDate(res.date) }}</td>
                     <td class="p-3.5 text-amber-400 font-semibold">{{ res.spaceName }}</td>
                     <td class="p-3.5">{{ res.shift }}</td>
                     <td class="p-3.5">{{ res.residentName }} ({{ res.unit }})</td>
-                    <td class="p-3.5 text-right">
-                      <button @click="printGuestList(res)" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto">
+                    <td class="p-3.5 text-right space-x-2 whitespace-nowrap">
+                      <button @click="openGuestListModal(res)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition-colors">Ver ({{ (res.guests || []).length }})</button>
+                      <button @click="printGuestList(res)" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-colors">
                         <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Lista
                       </button>
                     </td>
+                  </tr>
+                  <tr v-if="upcomingReservations.length === 0">
+                    <td colspan="5" class="p-6 text-center text-slate-500">Nenhuma reserva futura.</td>
                   </tr>
                 </tbody>
               </table>
@@ -761,20 +823,27 @@
       <div v-if="showGuestModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
         <div class="glass-modal max-w-lg w-full rounded-2xl p-6 space-y-4 border border-brand-border shadow-2xl">
           <div class="flex justify-between items-center border-b border-brand-border pb-3">
-            <h3 class="text-lg font-bold text-white">Lista de Convidados</h3>
+            <div>
+              <h3 class="text-lg font-bold text-white">Lista de Convidados</h3>
+              <p class="text-[11px] text-slate-400">{{ activeReservationForGuests?.spaceName }} - {{ formatDate(activeReservationForGuests?.date) }} - {{ activeReservationForGuests?.residentName }}</p>
+            </div>
             <button @click="showGuestModal = false" class="text-slate-400 hover:text-white text-xl">&times;</button>
           </div>
-          <div class="flex gap-2 text-xs">
+          <div v-if="currentUser.role !== 'doorman'" class="flex gap-2 text-xs">
             <input type="text" v-model="newGuestName" placeholder="Nome Completo do Convidado" class="flex-1 bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-white" />
             <button @click="addGuest" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl">+ Adicionar</button>
           </div>
           <div class="max-h-56 overflow-y-auto space-y-2">
             <div v-for="(g, idx) in activeReservationForGuests?.guests" :key="idx" class="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-brand-border text-xs">
               <span class="font-bold text-white">{{ g.name }}</span>
-              <button @click="removeGuest(idx)" class="text-red-400 font-bold">Remover</button>
+              <button v-if="currentUser.role !== 'doorman'" @click="removeGuest(idx)" class="text-red-400 font-bold">Remover</button>
             </div>
+            <p v-if="!activeReservationForGuests?.guests?.length" class="text-xs text-slate-500">Nenhum convidado cadastrado pelo morador.</p>
           </div>
-          <div class="text-right pt-2 border-t border-brand-border"><button @click="showGuestModal = false" class="px-5 py-2 bg-slate-800 text-white text-xs rounded-xl">Concluir</button></div>
+          <div class="flex justify-end gap-2 pt-2 border-t border-brand-border">
+            <button @click="printGuestList(activeReservationForGuests)" class="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/40 font-bold text-xs rounded-xl transition-colors">Imprimir Lista</button>
+            <button @click="showGuestModal = false" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs rounded-xl transition-colors">Concluir</button>
+          </div>
         </div>
       </div>
 
@@ -820,6 +889,9 @@
             <td class="border p-2">{{ index + 1 }}</td>
             <td class="border p-2 font-bold">{{ g.name }}</td>
             <td class="border p-2">___________________________</td>
+          </tr>
+          <tr v-if="!printData.guests || printData.guests.length === 0">
+            <td colspan="3" class="border p-2 text-center">Nenhum convidado cadastrado pelo morador.</td>
           </tr>
         </tbody>
       </table>
@@ -904,7 +976,7 @@ const DEFAULT_SPACES = [
           loginForm: { email: '', password: '' },
           registerForm: { name: '', unit: '', email: '', password: '', privacy: false },
           form: { date: '', shift: '', termsAccepted: false },
-          adminBookingForm: { residentName: '', unit: '', spaceId: '', date: '', shift: 'Diária Completa (08h às 22h)' },
+          adminBookingForm: { residentName: '', unit: '', userId: null, spaceId: '', date: '', shift: 'Diária Completa (08h às 22h)' },
           userPasswordForm: { current: '', new: '', confirm: '' },
           newGuestName: '',
 
@@ -914,6 +986,9 @@ const DEFAULT_SPACES = [
           unsubs: [],
           authLock: false,
           condoName: 'CondoSpace',
+          userSearch: '',
+          doormanDate: '',
+          residentListOpen: false,
           contactEmail: '',
           condoForm: { name: '', contactEmail: '', regulationText: '' },
           showPrivacyModal: false,
@@ -927,6 +1002,45 @@ const DEFAULT_SPACES = [
         };
       },
       computed: {
+        filteredUsers() {
+          const q = this.normalize(this.userSearch);
+          const list = [...this.userList].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          return q ? list.filter(u => this.normalize(`${u.name} ${u.email} ${u.unit}`).includes(q)) : list;
+        },
+        residentSuggestions() {
+          const q = this.normalize(this.adminBookingForm.residentName);
+          if (!this.residentListOpen || !q) return [];
+          return this.userList
+            .filter(u => u.role === 'resident' && u.status === 'Aprovado' && this.normalize(`${u.name} ${u.unit}`).includes(q))
+            .slice(0, 6);
+        },
+        doormanStats() {
+          const today = this.todayStr();
+          const limit = new Date(); limit.setDate(limit.getDate() + 7);
+          const max = this.todayStr(limit);
+          return {
+            month: this.reservations.filter(r => r.date.startsWith(today.slice(0, 7))).length,
+            today: this.reservations.filter(r => r.date === today).length,
+            week: this.reservations.filter(r => r.date >= today && r.date <= max).length
+          };
+        },
+        doormanAgenda() {
+          return this.spaces.map(space => ({
+            space,
+            shifts: this.shiftNames(space).map(name => ({
+              name,
+              res: this.reservations.find(r =>
+                (r.spaceId ? r.spaceId === space.id : r.spaceName === space.name) &&
+                r.date === this.doormanDate && r.shift === name) || null
+            }))
+          }));
+        },
+        upcomingReservations() {
+          const today = this.todayStr();
+          return this.reservations
+            .filter(r => r.date >= today)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.spaceName.localeCompare(b.spaceName));
+        },
         privacySections() {
           const contact = this.contactEmail || 'administração do condomínio';
           return [
@@ -998,6 +1112,7 @@ const DEFAULT_SPACES = [
       },
       mounted() {
         this.refreshIcons();
+        this.doormanDate = this.todayStr();
         fb.onSnapshot(this.condoRef(), (snap) => {
           if (!snap.exists()) {
             this.authAlert = { text: 'Condomínio não configurado. Contate o suporte.', type: 'error' };
@@ -1172,7 +1287,7 @@ const DEFAULT_SPACES = [
         async handleAdminCreateReservation() {
           const space = this.spaces.find(s => s.id === this.adminBookingForm.spaceId);
           const ok = await this.saveReservation({
-            userId: 999,
+            userId: this.adminBookingForm.userId || 999,
             residentName: this.adminBookingForm.residentName,
             unit: this.adminBookingForm.unit,
             spaceName: space.name,
@@ -1201,6 +1316,53 @@ const DEFAULT_SPACES = [
           this.selectedSpace = this.spaces[0];
           this.form.shift = '';
           this.showReservationModal = true;
+        },
+        normalize(text) {
+          return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        },
+        shiftNames(space) {
+          return space.scheduleType === 'Diária Completa'
+            ? ['Diária Completa (08h às 22h)']
+            : ['Turno Almoço (10h às 16h)', 'Turno Jantar (17h às 23h)'];
+        },
+        onResidentInput() {
+          this.adminBookingForm.userId = null;
+          this.residentListOpen = true;
+        },
+        pickResident(u) {
+          this.adminBookingForm = { ...this.adminBookingForm, residentName: u.name, unit: u.unit || '', userId: u.id };
+          this.residentListOpen = false;
+        },
+        compressImage(file, maxWidth = 900, maxChars = 350000) {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+              URL.revokeObjectURL(url);
+              const scale = Math.min(1, maxWidth / img.width);
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(img.width * scale);
+              canvas.height = Math.round(img.height * scale);
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              let quality = 0.8, out = canvas.toDataURL('image/jpeg', quality);
+              while (out.length > maxChars && quality > 0.3) {
+                quality -= 0.1;
+                out = canvas.toDataURL('image/jpeg', quality);
+              }
+              out.length > maxChars ? reject(new Error('too-large')) : resolve(out);
+            };
+            img.onerror = reject;
+            img.src = url;
+          });
+        },
+        async onSpaceImage(ev, space) {
+          const file = ev.target.files[0];
+          ev.target.value = '';
+          if (!file) return;
+          if (!file.type.startsWith('image/')) { alert('Selecione um arquivo de imagem.'); return; }
+          try {
+            space.image = await this.compressImage(file);
+          } catch (e) { alert('Não foi possível processar esta imagem. Tente outra foto (JPG ou PNG).'); }
         },
         colRef(name) { return fb.collection(fb.db, 'condos', CONDO_ID, name); },
         docRef(name, id) { return fb.doc(fb.db, 'condos', CONDO_ID, name, id); },
@@ -1269,8 +1431,7 @@ const DEFAULT_SPACES = [
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
           } catch (e) { this.fbError(e); }
         },
-        todayStr() {
-          const d = new Date();
+        todayStr(d = new Date()) {
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         },
         reservationId(spaceId, date, shift) {
