@@ -33,6 +33,10 @@
     }
   </script>
   
+  <script>
+    try { var t = localStorage.getItem('condospace-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+
   <style>
     [v-cloak] { display: none !important; }
     body {
@@ -60,6 +64,43 @@
       #app > *:not(#print-section) { display: none !important; }
       #print-section { display: block !important; color: #000; background: #fff; padding: 20px; }
     }
+    html { color-scheme: dark; }
+    html[data-theme="light"] { color-scheme: light; }
+    html[data-theme="light"] body { background-color: #F1F5F9; color: #0F172A; }
+    html[data-theme="light"] .glass-card { background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(15, 23, 42, 0.1); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
+    html[data-theme="light"] .glass-modal { background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(15, 23, 42, 0.12); }
+    html[data-theme="light"] .neon-glow-green { box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3); }
+    html[data-theme="light"] .bg-slate-950 { background-color: #FFFFFF; }
+    html[data-theme="light"] .bg-slate-900 { background-color: #F8FAFC; }
+    html[data-theme="light"] .bg-slate-800,
+    html[data-theme="light"] .bg-slate-800\/90 { background-color: #E2E8F0; }
+    html[data-theme="light"] .bg-slate-900\/80 { background-color: #F1F5F9; }
+    html[data-theme="light"] .bg-slate-950\/80 { background-color: rgba(15, 23, 42, 0.5); }
+    html[data-theme="light"] .hover\:bg-slate-700:hover,
+    html[data-theme="light"] .hover\:bg-slate-800:hover { background-color: #CBD5E1; }
+    html[data-theme="light"] .hover\:bg-slate-800\/30:hover { background-color: rgba(15, 23, 42, 0.04); }
+    html[data-theme="light"] .text-white,
+    html[data-theme="light"] .hover\:text-white:hover { color: #0F172A; }
+    html[data-theme="light"] .bg-red-500.text-white { color: #FFFFFF; }
+    html[data-theme="light"] .text-slate-200 { color: #1E293B; }
+    html[data-theme="light"] .text-slate-300,
+    html[data-theme="light"] .hover\:text-slate-300:hover { color: #334155; }
+    html[data-theme="light"] .text-slate-400,
+    html[data-theme="light"] .text-slate-500 { color: #64748B; }
+    html[data-theme="light"] .text-brand-neonGreen,
+    html[data-theme="light"] .text-emerald-400 { color: #059669; }
+    html[data-theme="light"] .text-brand-neonBlue,
+    html[data-theme="light"] .text-blue-400 { color: #2563EB; }
+    html[data-theme="light"] .text-brand-neonAmber,
+    html[data-theme="light"] .text-amber-400 { color: #B45309; }
+    html[data-theme="light"] .text-red-400,
+    html[data-theme="light"] .hover\:text-red-400:hover { color: #DC2626; }
+    html[data-theme="light"] .border-brand-border { border-color: rgba(15, 23, 42, 0.12); }
+    html[data-theme="light"] .border-slate-700 { border-color: #CBD5E1; }
+    html[data-theme="light"] .hover\:border-slate-600:hover { border-color: #94A3B8; }
+    html[data-theme="light"] .divide-brand-border > :not([hidden]) ~ :not([hidden]) { border-color: rgba(15, 23, 42, 0.12); }
+    html[data-theme="light"] ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.05); }
+    html[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.25); }
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -84,6 +125,10 @@
     </div>
 
     <div v-else-if="!currentUser" class="min-h-screen flex items-center justify-center p-4">
+      <button type="button" @click="toggleTheme" :title="theme === 'dark' ? 'Modo claro' : 'Modo noturno'" aria-label="Alternar tema" class="fixed top-4 right-4 z-10 p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-brand-border transition-colors">
+            <svg v-if="theme === 'dark'" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            <svg v-else class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          </button>
       <div class="glass-modal max-w-md w-full rounded-2xl p-8 border border-brand-border shadow-2xl space-y-6">
         <div class="text-center space-y-2">
           <div class="inline-flex p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-brand-neonGreen mb-2">
@@ -227,6 +272,10 @@
               <i data-lucide="key-round" class="w-4 h-4"></i>
             </button>
 
+            <button type="button" @click="toggleTheme" :title="theme === 'dark' ? 'Modo claro' : 'Modo noturno'" aria-label="Alternar tema" class=" p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-brand-border transition-colors">
+            <svg v-if="theme === 'dark'" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            <svg v-else class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          </button>
             <button @click="logout" class="p-2.5 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl border border-brand-border" title="Sair">
               <i data-lucide="log-out" class="w-4 h-4"></i>
             </button>
@@ -986,6 +1035,7 @@ const DEFAULT_SPACES = [
           unsubs: [],
           authLock: false,
           condoName: 'CondoSpace',
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
           userSearch: '',
           doormanDate: '',
           residentListOpen: false,
@@ -1316,6 +1366,11 @@ const DEFAULT_SPACES = [
           this.selectedSpace = this.spaces[0];
           this.form.shift = '';
           this.showReservationModal = true;
+        },
+        toggleTheme() {
+          this.theme = this.theme === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', this.theme);
+          try { localStorage.setItem('condospace-theme', this.theme); } catch (e) {}
         },
         normalize(text) {
           return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
