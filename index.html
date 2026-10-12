@@ -34,6 +34,7 @@
   </script>
   
   <style>
+    [v-cloak] { display: none !important; }
     body {
       background-color: #0B0F17;
       color: #E2E8F0;
@@ -85,19 +86,23 @@
   </style>
 </head>
 <body class="min-h-screen pb-12">
-  <div id="app">
+  <div id="app" v-cloak>
 
     <!-- ================================================================= -->
     <!-- TELA DE LOGIN E REGISTRO -->
     <!-- ================================================================= -->
-    <div v-if="!currentUser" class="min-h-screen flex items-center justify-center p-4">
+    <div v-if="!authReady" class="min-h-screen flex items-center justify-center">
+      <div class="w-8 h-8 border-2 border-slate-700 border-t-emerald-400 rounded-full animate-spin"></div>
+    </div>
+
+    <div v-else-if="!currentUser" class="min-h-screen flex items-center justify-center p-4">
       <div class="glass-modal max-w-md w-full rounded-2xl p-8 border border-brand-border shadow-2xl space-y-6">
         <div class="text-center space-y-2">
           <div class="inline-flex p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-brand-neonGreen mb-2">
             <i data-lucide="building-2" class="w-8 h-8"></i>
           </div>
           <h1 class="text-2xl font-bold text-white tracking-wide">CondoSpace</h1>
-          <p class="text-xs text-slate-400">Residencial Vista do Parque</p>
+          <p class="text-xs text-slate-400">Condominio Primavera Ville</p>
         </div>
 
         <div v-if="authAlert.text" :class="authAlert.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'" class="p-3 rounded-xl border text-xs font-medium text-center">
@@ -182,7 +187,7 @@
             </div>
             <div>
               <h1 class="font-bold text-xl tracking-wide text-white">CondoSpace</h1>
-              <p class="text-xs text-slate-400">Residencial Vista do Parque</p>
+              <p class="text-xs text-slate-400">Condominio Primavera Ville</p>
             </div>
           </div>
 
@@ -634,9 +639,16 @@
               <p class="text-slate-300">A taxa de <strong class="text-emerald-400">R$ {{ selectedSpace?.fee.toFixed(2) }}</strong> virá no próximo boleto ({{ currentUser.unit }}).</p>
             </div>
 
+            <div class="space-y-2">
+              <p class="text-slate-200 font-bold text-sm">Termo de Uso e Regulamento Interno</p>
+              <div class="max-h-32 overflow-y-auto p-3 bg-slate-900 border border-brand-border rounded-xl text-[11px] text-slate-300 space-y-1.5 leading-relaxed">
+                <p v-for="(item, i) in regulation" :key="i">{{ i + 1 }}. {{ item }}</p>
+              </div>
+            </div>
+
             <label class="flex items-start gap-2 text-slate-200 cursor-pointer">
               <input type="checkbox" v-model="form.termsAccepted" required class="mt-0.5 rounded bg-slate-900 border-slate-700 text-emerald-500" />
-              <span class="text-[11px]">Li e concordo com o Regulamento Interno das áreas comuns.</span>
+              <span class="text-[11px]">Li e concordo com o Termo de Uso e o Regulamento Interno acima.</span>
             </label>
 
             <div class="flex justify-end gap-3 pt-3 border-t border-brand-border">
@@ -644,6 +656,35 @@
               <button type="submit" :disabled="!form.shift" class="px-5 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50">
                 Confirmar Reserva
               </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL ALTERAR SENHA (MORADOR) -->
+      <div v-if="showUserChangePasswordModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="glass-modal max-w-sm w-full rounded-2xl p-6 space-y-4 border border-brand-border shadow-2xl">
+          <div class="flex justify-between items-center border-b border-brand-border pb-3">
+            <h3 class="text-lg font-bold text-white">Alterar Senha</h3>
+            <button type="button" @click="closePasswordModal" class="text-slate-400 hover:text-white text-xl transition-colors">&times;</button>
+          </div>
+          <form @submit.prevent="changeOwnPassword" class="space-y-3 text-xs">
+            <p v-if="passwordAlert.text" :class="passwordAlert.type === 'error' ? 'text-red-400' : 'text-emerald-400'" class="text-[11px] font-semibold">{{ passwordAlert.text }}</p>
+            <div class="space-y-1">
+              <label class="text-slate-400 font-semibold">Senha atual</label>
+              <input type="password" v-model="userPasswordForm.current" required autocomplete="current-password" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-slate-400 font-semibold">Nova senha</label>
+              <input type="password" v-model="userPasswordForm.new" required minlength="6" autocomplete="new-password" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-slate-400 font-semibold">Confirmar nova senha</label>
+              <input type="password" v-model="userPasswordForm.confirm" required minlength="6" autocomplete="new-password" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+            </div>
+            <div class="flex justify-end gap-3 pt-3 border-t border-brand-border">
+              <button type="button" @click="closePasswordModal" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors">Fechar</button>
+              <button type="submit" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-colors">Salvar</button>
             </div>
           </form>
         </div>
@@ -657,9 +698,7 @@
             <button @click="showRegulationModal = false" class="text-slate-400 hover:text-white text-xl">&times;</button>
           </div>
           <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
-            <p>1. O Salão de Festas possui diária completa (08h às 22h).</p>
-            <p>2. As Churrasqueiras possuem turnos divididos para Almoço e Jantar.</p>
-            <p>3. Som alto proibido após as 22h sob multa regimental.</p>
+            <p v-for="(item, i) in regulation" :key="i">{{ i + 1 }}. {{ item }}</p>
           </div>
           <div class="text-right pt-2"><button @click="showRegulationModal = false" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl">Fechar</button></div>
         </div>
@@ -678,7 +717,7 @@
           <div class="max-h-56 overflow-y-auto space-y-2">
             <div v-for="(g, idx) in activeReservationForGuests?.guests" :key="idx" class="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-brand-border text-xs">
               <span class="font-bold text-white">{{ g.name }}</span>
-              <button @click="activeReservationForGuests.guests.splice(idx, 1)" class="text-red-400 font-bold">Remover</button>
+              <button @click="removeGuest(idx)" class="text-red-400 font-bold">Remover</button>
             </div>
           </div>
           <div class="text-right pt-2 border-t border-brand-border"><button @click="showGuestModal = false" class="px-5 py-2 bg-slate-800 text-white text-xs rounded-xl">Concluir</button></div>
@@ -690,7 +729,7 @@
     <!-- SEÇÃO OCULTA EXCLUSIVA PARA IMPRESSÃO DA PORTARIA -->
     <div id="print-section" class="hidden">
       <div class="text-center border-b pb-4 mb-4">
-        <h1 class="text-2xl font-bold">CondoSpace - Residencial Vista do Parque</h1>
+        <h1 class="text-2xl font-bold">CondoSpace - Condominio Primavera Ville</h1>
         <h2 class="text-lg font-semibold">Lista de Convidados da Portaria</h2>
       </div>
       <div class="mb-4 text-sm" v-if="printData">
@@ -722,7 +761,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
       getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-      createUserWithEmailAndPassword, signOut
+      createUserWithEmailAndPassword, signOut,
+      reauthenticateWithCredential, EmailAuthProvider, updatePassword
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
       getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
@@ -743,6 +783,7 @@
     window.fb = {
       auth: getAuth(app), db: getFirestore(app),
       onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+      reauthenticateWithCredential, EmailAuthProvider, updatePassword,
       collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot
     };
   </script>
@@ -775,7 +816,7 @@
           registerForm: { name: '', unit: '', email: '', password: '' },
           form: { date: '', shift: '', termsAccepted: false },
           adminBookingForm: { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' },
-          userPasswordForm: { current: '', new: '' },
+          userPasswordForm: { current: '', new: '', confirm: '' },
           newGuestName: '',
 
           filters: { period: 'month', space: 'all' },
@@ -783,6 +824,13 @@
           userList: [],
           unsubs: [],
           authLock: false,
+          authReady: false,
+          passwordAlert: { text: '', type: '' },
+          regulation: [
+            'O Salão de Festas possui diária completa (08h às 22h).',
+            'As Churrasqueiras possuem turnos divididos para Almoço e Jantar.',
+            'Som alto proibido após as 22h sob multa regimental.'
+          ],
 
           spaces: [
             { id: 1, name: 'Salão de Festas Principal', description: 'Ambiente climatizado, freezer, som integrado e mesas.', capacity: 80, fee: 250.00, scheduleType: 'Diária Completa', image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=600&q=80' },
@@ -853,12 +901,16 @@
         this.refreshIcons();
         fb.onAuthStateChanged(fb.auth, async (fbUser) => {
           if (this.authLock) return;
-          if (!fbUser) {
-            this.stopListeners();
-            this.currentUser = null;
-            return;
+          try {
+            if (!fbUser) {
+              this.stopListeners();
+              this.currentUser = null;
+              return;
+            }
+            await this.loadSession(fbUser);
+          } finally {
+            this.authReady = true;
           }
-          await this.loadSession(fbUser);
         });
       },
       updated() {
@@ -1081,6 +1133,36 @@
             });
             this.newGuestName = '';
           } catch (e) { this.fbError(e); }
+        },
+        async removeGuest(idx) {
+          const res = this.activeReservationForGuests;
+          try {
+            await fb.updateDoc(fb.doc(fb.db, 'reservations', res.id), {
+              guests: res.guests.filter((_, i) => i !== idx)
+            });
+          } catch (e) { this.fbError(e); }
+        },
+        closePasswordModal() {
+          this.showUserChangePasswordModal = false;
+          this.userPasswordForm = { current: '', new: '', confirm: '' };
+          this.passwordAlert = { text: '', type: '' };
+        },
+        async changeOwnPassword() {
+          const f = this.userPasswordForm;
+          const fail = (text) => { this.passwordAlert = { text, type: 'error' }; };
+          if (f.new.length < 6) return fail('A nova senha deve ter ao menos 6 caracteres.');
+          if (f.new !== f.confirm) return fail('A confirmação não confere com a nova senha.');
+          if (f.new === f.current) return fail('A nova senha deve ser diferente da atual.');
+          try {
+            const user = fb.auth.currentUser;
+            await fb.reauthenticateWithCredential(user, fb.EmailAuthProvider.credential(user.email, f.current));
+            await fb.updatePassword(user, f.new);
+            this.userPasswordForm = { current: '', new: '', confirm: '' };
+            this.passwordAlert = { text: 'Senha alterada com sucesso.', type: 'success' };
+          } catch (e) {
+            const wrong = ['auth/invalid-credential', 'auth/wrong-password'].includes(e.code);
+            fail(wrong ? 'Senha atual incorreta.' : this.authError(e));
+          }
         },
         filteredGuests(guests) {
           if (!this.guestSearch) return guests;
