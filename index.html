@@ -899,7 +899,15 @@
         async loadSession(fbUser) {
           try {
             const snap = await fb.getDoc(fb.doc(fb.db, 'users', fbUser.uid));
-            const profile = snap.exists() ? snap.data() : null;
+            let profile = snap.exists() ? snap.data() : null;
+            // Usuário criado direto no console sem perfil: se não há nenhum perfil no sistema, vira administrador
+            if (!profile && (await fb.getDocs(fb.collection(fb.db, 'users'))).empty) {
+              profile = {
+                name: fbUser.displayName || fbUser.email.split('@')[0], email: fbUser.email, unit: '',
+                role: 'admin', status: 'Aprovado', createdAt: Date.now()
+              };
+              await fb.setDoc(fb.doc(fb.db, 'users', fbUser.uid), profile);
+            }
             if (!profile || profile.status === 'Pendente') {
               this.authAlert = {
                 text: profile ? 'Seu cadastro aguarda aprovação.' : 'Cadastro não encontrado.',
