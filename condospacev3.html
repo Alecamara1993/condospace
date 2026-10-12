@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CondoSpace - Sistema Integrado de Gestão e Agendamentos</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue.js 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              dark: '#0B0F17',
+              card: 'rgba(22, 30, 46, 0.75)',
+              border: 'rgba(255, 255, 255, 0.08)',
+              neonGreen: '#00FF87',
+              neonBlue: '#60A5FA',
+              neonAmber: '#FBBF24',
+              neonRed: '#F87171'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      background-color: #0B0F17;
+      color: #E2E8F0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    .glass-card {
+      background: rgba(22, 30, 46, 0.75);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-modal {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .neon-glow-green {
+      box-shadow: 0 0 15px rgba(0, 255, 135, 0.25);
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #print-section, #print-section * {
+        visibility: visible;
+      }
+      #print-section {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        color: #000;
+        background: #fff;
+        padding: 20px;
+      }
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-12">
+  <div id="app">
+
+    <!-- ================================================================= -->
+    <!-- TELA DE LOGIN E REGISTRO -->
+    <!-- ================================================================= -->
+    <div v-if="!currentUser" class="min-h-screen flex items-center justify-center p-4">
+      <div class="glass-modal max-w-md w-full rounded-2xl p-8 border border-brand-border shadow-2xl space-y-6">
+        <div class="text-center space-y-2">
+          <div class="inline-flex p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-brand-neonGreen mb-2">
+            <i data-lucide="building-2" class="w-8 h-8"></i>
+          </div>
+          <h1 class="text-2xl font-bold text-white tracking-wide">CondoSpace</h1>
+          <p class="text-xs text-slate-400">Residencial Vista do Parque</p>
+        </div>
+
+        <div v-if="authAlert.text" :class="authAlert.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'" class="p-3 rounded-xl border text-xs font-medium text-center">
+          {{ authAlert.text }}
+        </div>
+
+        <!-- FORM LOGIN -->
+        <form v-if="authMode === 'login'" @submit.prevent="handleLogin" class="space-y-4 text-xs">
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">E-mail</label>
+            <input type="email" v-model="loginForm.email" required placeholder="seu@email.com" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all" />
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Senha</label>
+            <input type="password" v-model="loginForm.password" required placeholder="••••••••" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all" />
+          </div>
+
+          <button type="submit" class="w-full py-3 bg-emerald-500 text-slate-950 font-bold text-sm rounded-xl hover:bg-emerald-400 neon-glow-green transition-all">
+            Entrar no Sistema
+          </button>
+
+          <div class="pt-4 border-t border-brand-border text-[11px] text-slate-400 space-y-1">
+            <p class="font-bold text-slate-300">Contas de Teste:</p>
+            <p>• Admin: <code class="text-emerald-400">admin@condo.com</code> (Senha: 123)</p>
+            <p>• Morador: <code class="text-emerald-400">morador@condo.com</code> (Senha: 123)</p>
+            <p>• Portaria: <code class="text-emerald-400">portaria@condo.com</code> (Senha: 123)</p>
+          </div>
+
+          <div class="text-center pt-2">
+            <button type="button" @click="authMode = 'register'; clearAlert()" class="text-emerald-400 hover:underline font-semibold">
+              Solicitar cadastro de Morador
+            </button>
+          </div>
+        </form>
+
+        <!-- FORM REGISTRO -->
+        <form v-if="authMode === 'register'" @submit.prevent="handleRegister" class="space-y-4 text-xs">
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Nome Completo</label>
+            <input type="text" v-model="registerForm.name" required placeholder="Ex: Alessandro Câmara" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Bloco e Apto/Casa</label>
+            <input type="text" v-model="registerForm.unit" required placeholder="Ex: Bloco B - Apto 402" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">E-mail</label>
+            <input type="email" v-model="registerForm.email" required placeholder="seu@email.com" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <div>
+            <label class="block text-slate-300 mb-1 font-medium">Senha</label>
+            <input type="password" v-model="registerForm.password" required placeholder="••••••••" class="w-full bg-slate-900 border border-brand-border rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <button type="submit" class="w-full py-3 bg-emerald-500 text-slate-950 font-bold text-sm rounded-xl hover:bg-emerald-400 neon-glow-green transition-all">
+            Enviar Solicitação
+          </button>
+
+          <div class="text-center pt-2">
+            <button type="button" @click="authMode = 'login'; clearAlert()" class="text-slate-400 hover:text-white font-semibold">
+              ← Voltar para Login
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- ÁREA AUTENTICADA -->
+    <!-- ================================================================= -->
+    <div v-else>
+      <!-- HEADER -->
+      <header class="glass-card sticky top-0 z-40 mb-8 border-b border-brand-border px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-brand-neonGreen">
+              <i data-lucide="building-2" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h1 class="font-bold text-xl tracking-wide text-white">CondoSpace</h1>
+              <p class="text-xs text-slate-400">Residencial Vista do Parque</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <!-- NOTIFICAÇÕES ADMIN -->
+            <div v-if="currentUser.role === 'admin'" class="relative">
+              <button @click="showNotifications = !showNotifications" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-amber-500/30 relative">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span v-if="pendingUsersCount > 0" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white font-bold text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                  {{ pendingUsersCount }}
+                </span>
+              </button>
+
+              <div v-if="showNotifications" class="absolute right-0 mt-3 w-80 glass-modal rounded-2xl p-4 border border-brand-border shadow-2xl z-50 space-y-3">
+                <div class="flex justify-between items-center border-b border-brand-border pb-2">
+                  <h4 class="font-bold text-xs text-white">Solicitações Pendentes</h4>
+                  <span class="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">{{ pendingUsersCount }}</span>
+                </div>
+                <div class="max-h-56 overflow-y-auto space-y-2">
+                  <div v-for="user in pendingUsersList" :key="user.id" class="p-2.5 bg-slate-900 rounded-xl border border-brand-border text-xs flex justify-between items-center">
+                    <div>
+                      <p class="font-bold text-white">{{ user.name }}</p>
+                      <p class="text-[11px] text-emerald-400">{{ user.unit }}</p>
+                    </div>
+                    <button @click="approveUser(user); showNotifications = false" class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg text-[11px] font-bold">Aprovar</button>
+                  </div>
+                  <div v-if="pendingUsersCount === 0" class="text-center text-slate-500 text-xs py-2">Sem pendências.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DADOS DO USUÁRIO -->
+            <div class="text-right">
+              <p class="text-sm font-bold text-white">{{ currentUser.name }}</p>
+              <p class="text-xs text-slate-400">
+                <span :class="getRoleBadgeClass(currentUser.role)" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border">
+                  {{ getRoleName(currentUser.role) }}
+                </span>
+                <span v-if="currentUser.unit" class="ml-1.5 text-slate-300 font-semibold">{{ currentUser.unit }}</span>
+              </p>
+            </div>
+
+            <button v-if="currentUser.role === 'resident'" @click="showUserChangePasswordModal = true" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl border border-blue-500/30" title="Alterar Senha">
+              <i data-lucide="key-round" class="w-4 h-4"></i>
+            </button>
+
+            <button @click="logout" class="p-2.5 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl border border-brand-border" title="Sair">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="max-w-7xl mx-auto px-6">
+
+        <!-- ================================================================= -->
+        <!-- 1. PAINEL DO MORADOR -->
+        <!-- ================================================================= -->
+        <section v-if="currentUser.role === 'resident'" class="space-y-8">
+          <div class="glass-card p-6 rounded-2xl flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <h2 class="text-2xl font-bold text-white">Olá, {{ currentUser.name }} 👋</h2>
+              <p class="text-slate-400 text-sm mt-1">Unidade: <strong class="text-emerald-400 font-semibold">{{ currentUser.unit }}</strong></p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button @click="showRegulationModal = true" class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-blue-400 font-semibold text-xs rounded-xl border border-blue-500/30 flex items-center gap-2">
+                <i data-lucide="book-open" class="w-4 h-4"></i> Regulamento Interno
+              </button>
+
+              <button @click="openReservationModal()" class="px-5 py-3 bg-emerald-500 text-slate-950 hover:bg-emerald-400 font-bold text-sm rounded-xl neon-glow-green flex items-center gap-2">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Agendar Novo Espaço
+              </button>
+            </div>
+          </div>
+
+          <!-- ESPAÇOS COM CAPACIDADE EDITÁVEL -->
+          <div>
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-5 h-5 text-brand-neonGreen"></i> Espaços do Condomínio
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div v-for="space in spaces" :key="space.id" class="glass-card rounded-2xl overflow-hidden hover:border-slate-600 transition-all flex flex-col justify-between">
+                <div>
+                  <div class="h-44 bg-slate-800 relative overflow-hidden">
+                    <img :src="space.image" :alt="space.name" class="w-full h-full object-cover opacity-80" />
+                    <span class="absolute top-3 right-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-brand-neonGreen border border-emerald-500/30">
+                      Taxa: R$ {{ space.fee.toFixed(2) }}
+                    </span>
+                  </div>
+                  <div class="p-5">
+                    <h4 class="text-lg font-bold text-white">{{ space.name }}</h4>
+                    <p class="text-slate-400 text-xs mt-1 leading-relaxed">{{ space.description }}</p>
+                    <div class="flex items-center gap-3 mt-4 text-[11px] text-slate-300 border-t border-brand-border pt-3">
+                      <span class="flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5 text-emerald-400"></i> Máx: {{ space.capacity }} Pessoas</span>
+                      <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5 text-blue-400"></i> {{ space.scheduleType }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="px-5 pb-5 pt-1">
+                  <button @click="selectSpaceAndOpen(space)" class="w-full py-2.5 bg-slate-800/90 hover:bg-slate-700 text-emerald-400 font-semibold text-xs rounded-xl border border-emerald-500/30 flex items-center justify-center gap-2">
+                    <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> Consultar Agenda / Reservar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MEUS AGENDAMENTOS -->
+          <div class="glass-card p-6 rounded-2xl">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <i data-lucide="calendar" class="w-5 h-5 text-brand-neonBlue"></i> Meus Agendamentos
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm text-slate-300">
+                <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
+                  <tr>
+                    <th class="p-3.5">Espaço</th>
+                    <th class="p-3.5">Data & Turno</th>
+                    <th class="p-3.5">Valor Taxa</th>
+                    <th class="p-3.5">Status</th>
+                    <th class="p-3.5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-brand-border">
+                  <tr v-for="res in myReservations" :key="res.id" class="hover:bg-slate-800/30">
+                    <td class="p-3.5 font-semibold text-white">{{ res.spaceName }}</td>
+                    <td class="p-3.5">{{ formatDate(res.date) }} <span class="text-xs text-slate-400 block">{{ res.shift }}</span></td>
+                    <td class="p-3.5 text-emerald-400 font-bold">R$ {{ res.fee.toFixed(2) }}</td>
+                    <td class="p-3.5"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Confirmado</span></td>
+                    <td class="p-3.5 text-right">
+                      <button @click="openGuestListModal(res)" class="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-lg border border-blue-500/30 inline-flex items-center gap-1">
+                        <i data-lucide="users" class="w-3.5 h-3.5"></i> Convidados ({{ res.guests.length }})
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="myReservations.length === 0">
+                    <td colspan="5" class="p-6 text-center text-slate-500">Você ainda não possui agendamentos.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- 2. PAINEL DA ADMINISTRAÇÃO -->
+        <!-- ================================================================= -->
+        <section v-if="currentUser.role === 'admin'" class="space-y-6">
+          <div class="flex flex-wrap gap-2 border-b border-brand-border pb-3">
+            <button @click="adminTab = 'dashboard'" :class="adminTab === 'dashboard' ? 'bg-emerald-500/20 text-brand-neonGreen border-emerald-500/40 font-bold' : 'text-slate-400 hover:text-white'" class="px-4 py-2.5 rounded-xl border border-transparent text-xs transition-all flex items-center gap-2">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard & Reservas
+            </button>
+            <button @click="adminTab = 'admin-booking'" :class="adminTab === 'admin-booking' ? 'bg-emerald-500/20 text-brand-neonGreen border-emerald-500/40 font-bold' : 'text-slate-400 hover:text-white'" class="px-4 py-2.5 rounded-xl border border-transparent text-xs transition-all flex items-center gap-2">
+              <i data-lucide="calendar-plus" class="w-4 h-4"></i> Agendar p/ Morador
+            </button>
+            <button @click="adminTab = 'spaces'" :class="adminTab === 'spaces' ? 'bg-blue-500/20 text-brand-neonBlue border-blue-500/40 font-bold' : 'text-slate-400 hover:text-white'" class="px-4 py-2.5 rounded-xl border border-transparent text-xs transition-all flex items-center gap-2">
+              <i data-lucide="settings-2" class="w-4 h-4"></i> Fotos, Capacidade & Valores
+            </button>
+            <button @click="adminTab = 'users'" :class="adminTab === 'users' ? 'bg-amber-500/20 text-brand-neonAmber border-amber-500/40 font-bold' : 'text-slate-400 hover:text-white'" class="px-4 py-2.5 rounded-xl border border-transparent text-xs transition-all flex items-center gap-2">
+              <i data-lucide="users-round" class="w-4 h-4"></i> Gestão de Moradores
+            </button>
+          </div>
+
+          <!-- ABA 1: DASHBOARD & EXCLUSÃO DE RESERVAS -->
+          <div v-if="adminTab === 'dashboard'" class="space-y-6">
+            <div class="glass-card p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4 border-l-4 border-emerald-500">
+              <div class="flex items-center gap-2 text-white font-bold text-sm">
+                <i data-lucide="filter" class="w-4 h-4 text-emerald-400"></i> Filtro Geral da Agenda:
+              </div>
+              <div class="flex flex-wrap items-center gap-3 text-xs">
+                <select v-model="filters.period" class="bg-slate-900 border border-brand-border rounded-xl px-3 py-2 text-white">
+                  <option value="today">Hoje (12/10/2026)</option>
+                  <option value="month">Mês Atual (Outubro/2026)</option>
+                  <option value="year">Ano (2026)</option>
+                  <option value="all">Todas as Datas</option>
+                </select>
+                <select v-model="filters.space" class="bg-slate-900 border border-brand-border rounded-xl px-3 py-2 text-white">
+                  <option value="all">Todos os Espaços</option>
+                  <option v-for="s in spaces" :key="s.id" :value="s.name">{{ s.name }}</option>
+                </select>
+                <button @click="resetFilters" class="px-3 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl">Limpar</button>
+              </div>
+            </div>
+
+            <!-- CARDS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div class="glass-card p-5 rounded-2xl border-l-4 border-emerald-500">
+                <p class="text-xs text-slate-400 font-medium">Reservas Filtradas</p>
+                <h3 class="text-3xl font-extrabold text-white mt-2">{{ filteredReservations.length }}</h3>
+              </div>
+              <div class="glass-card p-5 rounded-2xl border-l-4 border-blue-500">
+                <p class="text-xs text-slate-400 font-medium">Faturamento Filtrado</p>
+                <h3 class="text-3xl font-extrabold text-brand-neonGreen mt-2">R$ {{ filteredRevenue.toFixed(2) }}</h3>
+              </div>
+              <div class="glass-card p-5 rounded-2xl border-l-4 border-amber-500">
+                <p class="text-xs text-slate-400 font-medium">Cadastros Pendentes</p>
+                <h3 class="text-3xl font-extrabold text-brand-neonAmber mt-2">{{ pendingUsersCount }}</h3>
+              </div>
+              <div class="glass-card p-5 rounded-2xl border-l-4 border-purple-500">
+                <p class="text-xs text-slate-400 font-medium">Espaço Mais Ocupado</p>
+                <h3 class="text-base font-bold text-white mt-2 truncate">{{ mostPopularSpaceName }}</h3>
+              </div>
+            </div>
+
+            <!-- TABELA COM EXCLUSÃO DE RESERVAS POR DESISTÊNCIA -->
+            <div class="glass-card p-6 rounded-2xl border border-brand-border">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white">Todas as Reservas Registradas</h3>
+                <button @click="exportCSV" class="px-4 py-2 bg-emerald-500/20 text-brand-neonGreen border border-emerald-500/40 rounded-xl text-xs font-bold">Exportar CSV</button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                  <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
+                    <tr>
+                      <th class="p-3.5">Morador / Unidade</th>
+                      <th class="p-3.5">Espaço</th>
+                      <th class="p-3.5">Data & Turno</th>
+                      <th class="p-3.5">Valor Taxa</th>
+                      <th class="p-3.5 text-right">Ação Admin</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-brand-border">
+                    <tr v-for="item in filteredReservations" :key="item.id" class="hover:bg-slate-800/30">
+                      <td class="p-3.5 font-bold text-white">{{ item.residentName }} <span class="text-xs font-normal text-slate-400 block">{{ item.unit }}</span></td>
+                      <td class="p-3.5">{{ item.spaceName }}</td>
+                      <td class="p-3.5">{{ formatDate(item.date) }} <span class="text-xs text-slate-400 block">{{ item.shift }}</span></td>
+                      <td class="p-3.5 text-emerald-400 font-bold">R$ {{ item.fee.toFixed(2) }}</td>
+                      <td class="p-3.5 text-right">
+                        <button @click="deleteReservation(item.id)" class="text-xs px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/30">
+                          Excluir Reserva
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 2: AGENDAR EM NOME DE MORADOR -->
+          <div v-if="adminTab === 'admin-booking'" class="glass-card p-6 rounded-2xl border border-brand-border max-w-xl mx-auto space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i data-lucide="user-plus" class="w-5 h-5 text-emerald-400"></i> Criar Reserva em Nome de Morador
+            </h3>
+            <p class="text-xs text-slate-400">Utilize este formulário quando o morador não tiver cadastro ou solicitar auxílio presencial/telefone.</p>
+
+            <form @submit.prevent="handleAdminCreateReservation" class="space-y-4 text-xs">
+              <div>
+                <label class="block text-slate-300 mb-1 font-medium">Nome Completo do Morador</label>
+                <input type="text" v-model="adminBookingForm.residentName" required placeholder="Ex: João da Silva" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+              </div>
+
+              <div>
+                <label class="block text-slate-300 mb-1 font-medium">Unidade (Bloco/Apto)</label>
+                <input type="text" v-model="adminBookingForm.unit" required placeholder="Ex: Bloco A - Apto 102" class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+              </div>
+
+              <div>
+                <label class="block text-slate-300 mb-1 font-medium">Selecione o Espaço</label>
+                <select v-model="adminBookingForm.spaceId" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white">
+                  <option v-for="s in spaces" :key="s.id" :value="s.id">{{ s.name }} (R$ {{ s.fee.toFixed(2) }})</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-slate-300 mb-1 font-medium">Data do Evento</label>
+                <input type="date" v-model="adminBookingForm.date" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white" />
+              </div>
+
+              <div>
+                <label class="block text-slate-300 mb-1 font-medium">Turno</label>
+                <select v-model="adminBookingForm.shift" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white">
+                  <option value="Diária Completa (08h às 22h)">Diária Completa (08h às 22h)</option>
+                  <option value="Turno Almoço (10h às 16h)">Turno Almoço (10h às 16h)</option>
+                  <option value="Turno Jantar (17h às 23h)">Turno Jantar (17h às 23h)</option>
+                </select>
+              </div>
+
+              <button type="submit" class="w-full py-3 bg-emerald-500 text-slate-950 font-bold text-sm rounded-xl hover:bg-emerald-400">
+                Confirmar Reserva Manual
+              </button>
+            </form>
+          </div>
+
+          <!-- ABA 3: ALTERAR FOTOS, CAPACIDADE E VALORES -->
+          <div v-if="adminTab === 'spaces'" class="glass-card p-6 rounded-2xl border border-brand-border space-y-6">
+            <h3 class="text-xl font-bold text-white">Gerenciar Fotos, Capacidade e Valores dos Espaços</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div v-for="space in spaces" :key="space.id" class="p-5 bg-slate-900 rounded-2xl border border-brand-border space-y-4">
+                <h4 class="font-bold text-white border-b border-brand-border pb-2">{{ space.name }}</h4>
+
+                <div>
+                  <label class="block text-slate-400 text-xs mb-1 font-medium">URL da Imagem / Foto</label>
+                  <input type="text" v-model="space.image" class="w-full bg-slate-950 border border-brand-border rounded-xl px-3 py-2 text-xs text-white" />
+                </div>
+
+                <div>
+                  <label class="block text-slate-400 text-xs mb-1 font-medium">Capacidade Máxima (Pessoas)</label>
+                  <input type="number" v-model.number="space.capacity" class="w-full bg-slate-950 border border-brand-border rounded-xl px-3 py-2 text-xs text-white" />
+                </div>
+
+                <div>
+                  <label class="block text-slate-400 text-xs mb-1 font-medium">Taxa de Uso (R$)</label>
+                  <input type="number" step="0.01" v-model.number="space.fee" class="w-full bg-slate-950 border border-brand-border rounded-xl px-3 py-2 text-xs text-white font-bold text-emerald-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 4: MORADORES -->
+          <div v-if="adminTab === 'users'" class="glass-card p-6 rounded-2xl border border-brand-border space-y-4">
+            <h3 class="text-xl font-bold text-white">Gestão de Moradores e Usuários</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm text-slate-300">
+                <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
+                  <tr>
+                    <th class="p-3.5">Nome</th>
+                    <th class="p-3.5">E-mail</th>
+                    <th class="p-3.5">Unidade</th>
+                    <th class="p-3.5">Perfil</th>
+                    <th class="p-3.5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-brand-border">
+                  <tr v-for="user in userList" :key="user.id" class="hover:bg-slate-800/30">
+                    <td class="p-3.5 font-bold text-white">{{ user.name }}</td>
+                    <td class="p-3.5 text-slate-400">{{ user.email }}</td>
+                    <td class="p-3.5 text-emerald-400">{{ user.unit || '-' }}</td>
+                    <td class="p-3.5">
+                      <select v-model="user.role" class="bg-slate-900 border border-brand-border rounded px-2 py-1 text-xs">
+                        <option value="resident">Morador</option>
+                        <option value="doorman">Portaria</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td class="p-3.5 text-right space-x-2">
+                      <button v-if="user.status === 'Pendente'" @click="approveUser(user)" class="text-xs px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded">Aprovar</button>
+                      <button @click="openAdminResetPasswordModal(user)" class="text-xs px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded">Nova Senha</button>
+                      <button v-if="user.id !== currentUser.id" @click="deleteUser(user)" class="text-xs px-2.5 py-1 bg-red-500/10 text-red-400 rounded">Excluir</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- 3. PAINEL DA PORTARIA -->
+        <!-- ================================================================= -->
+        <section v-if="currentUser.role === 'doorman'" class="space-y-6">
+          <div class="glass-card p-6 rounded-2xl flex flex-wrap justify-between items-center gap-4 border-l-4 border-amber-500">
+            <div>
+              <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-6 h-6 text-brand-neonAmber"></i> Portaria - Painel de Controle
+              </h2>
+              <p class="text-slate-400 text-sm mt-1">Consulte a agenda completa de áreas comuns e libere a entrada de convidados.</p>
+            </div>
+          </div>
+
+          <!-- AGENDA COMPLETA DO CONDOMÍNIO PARA A PORTARIA -->
+          <div class="glass-card p-6 rounded-2xl space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i data-lucide="calendar-days" class="w-5 h-5 text-amber-400"></i> Visão Geral da Agenda do Condomínio
+            </h3>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm text-slate-300">
+                <thead class="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-brand-border">
+                  <tr>
+                    <th class="p-3.5">Data do Evento</th>
+                    <th class="p-3.5">Espaço Comun</th>
+                    <th class="p-3.5">Turno</th>
+                    <th class="p-3.5">Morador Responsável</th>
+                    <th class="p-3.5 text-right">Ação Portaria</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-brand-border">
+                  <tr v-for="res in reservations" :key="res.id" class="hover:bg-slate-800/30">
+                    <td class="p-3.5 font-bold text-white">{{ formatDate(res.date) }}</td>
+                    <td class="p-3.5 text-amber-400 font-semibold">{{ res.spaceName }}</td>
+                    <td class="p-3.5">{{ res.shift }}</td>
+                    <td class="p-3.5">{{ res.residentName }} ({{ res.unit }})</td>
+                    <td class="p-3.5 text-right">
+                      <button @click="printGuestList(res)" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Lista
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- ================================================================= -->
+      <!-- MODAL DE CONSULTA DE DISPONIBILIDADE / AGENDA MORADOR -->
+      <!-- ================================================================= -->
+      <div v-if="showReservationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="glass-modal max-w-xl w-full rounded-2xl p-6 space-y-5 border border-brand-border shadow-2xl">
+          <div class="flex justify-between items-center border-b border-brand-border pb-3">
+            <h3 class="text-lg font-bold text-white">Agendar {{ selectedSpace?.name }}</h3>
+            <button @click="showReservationModal = false" class="text-slate-400 hover:text-white text-xl">&times;</button>
+          </div>
+
+          <form @submit.prevent="confirmReservation" class="space-y-4 text-xs">
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">1. Selecione a Data</label>
+              <input type="date" v-model="form.date" required class="w-full bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <!-- GRADE DE TURNOS DISPONÍVEIS E BLOQUEADOS -->
+            <div v-if="form.date" class="space-y-2">
+              <label class="block text-slate-300 font-medium">2. Horários e Disponibilidade para {{ formatDate(form.date) }}</label>
+              
+              <div class="space-y-2">
+                <div v-for="shiftOption in availableShifts" :key="shiftOption.name" 
+                     :class="shiftOption.isTaken ? 'bg-red-500/10 border-red-500/30 opacity-75' : 'bg-slate-900 border-brand-border hover:border-emerald-500'" 
+                     class="p-3 rounded-xl border flex justify-between items-center transition-all">
+                  
+                  <div>
+                    <p class="font-bold text-white">{{ shiftOption.name }}</p>
+                    <p v-if="shiftOption.isTaken" class="text-[11px] text-red-400">
+                      ✗ Reservado por: {{ shiftOption.takenBy }}
+                    </p>
+                    <p v-else class="text-[11px] text-emerald-400">
+                      ✓ Disponível para Agendamento
+                    </p>
+                  </div>
+
+                  <button type="button" 
+                          :disabled="shiftOption.isTaken"
+                          @click="form.shift = shiftOption.name"
+                          :class="form.shift === shiftOption.name ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'"
+                          class="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                    {{ shiftOption.isTaken ? 'Ocupado' : (form.shift === shiftOption.name ? 'Selecionado ✓' : 'Selecionar') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1">
+              <p class="text-brand-neonAmber font-bold text-sm">Cobrança no Boleto Condominial</p>
+              <p class="text-slate-300">A taxa de <strong class="text-emerald-400">R$ {{ selectedSpace?.fee.toFixed(2) }}</strong> virá no próximo boleto ({{ currentUser.unit }}).</p>
+            </div>
+
+            <label class="flex items-start gap-2 text-slate-200 cursor-pointer">
+              <input type="checkbox" v-model="form.termsAccepted" required class="mt-0.5 rounded bg-slate-900 border-slate-700 text-emerald-500" />
+              <span class="text-[11px]">Li e concordo com o Regulamento Interno das áreas comuns.</span>
+            </label>
+
+            <div class="flex justify-end gap-3 pt-3 border-t border-brand-border">
+              <button type="button" @click="showReservationModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancelar</button>
+              <button type="submit" :disabled="!form.shift" class="px-5 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50">
+                Confirmar Reserva
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL DEMAIS TELAS -->
+      <div v-if="showRegulationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="glass-modal max-w-xl w-full rounded-2xl p-6 space-y-4 border border-brand-border shadow-2xl">
+          <div class="flex justify-between items-center border-b border-brand-border pb-3">
+            <h3 class="text-lg font-bold text-white">Regulamento Interno de Uso</h3>
+            <button @click="showRegulationModal = false" class="text-slate-400 hover:text-white text-xl">&times;</button>
+          </div>
+          <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+            <p>1. O Salão de Festas possui diária completa (08h às 22h).</p>
+            <p>2. As Churrasqueiras possuem turnos divididos para Almoço e Jantar.</p>
+            <p>3. Som alto proibido após as 22h sob multa regimental.</p>
+          </div>
+          <div class="text-right pt-2"><button @click="showRegulationModal = false" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl">Fechar</button></div>
+        </div>
+      </div>
+
+      <div v-if="showGuestModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        <div class="glass-modal max-w-lg w-full rounded-2xl p-6 space-y-4 border border-brand-border shadow-2xl">
+          <div class="flex justify-between items-center border-b border-brand-border pb-3">
+            <h3 class="text-lg font-bold text-white">Lista de Convidados</h3>
+            <button @click="showGuestModal = false" class="text-slate-400 hover:text-white text-xl">&times;</button>
+          </div>
+          <div class="flex gap-2 text-xs">
+            <input type="text" v-model="newGuestName" placeholder="Nome Completo do Convidado" class="flex-1 bg-slate-900 border border-brand-border rounded-xl px-3.5 py-2 text-white" />
+            <button @click="addGuest" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl">+ Adicionar</button>
+          </div>
+          <div class="max-h-56 overflow-y-auto space-y-2">
+            <div v-for="(g, idx) in activeReservationForGuests?.guests" :key="idx" class="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-brand-border text-xs">
+              <span class="font-bold text-white">{{ g.name }}</span>
+              <button @click="activeReservationForGuests.guests.splice(idx, 1)" class="text-red-400 font-bold">Remover</button>
+            </div>
+          </div>
+          <div class="text-right pt-2 border-t border-brand-border"><button @click="showGuestModal = false" class="px-5 py-2 bg-slate-800 text-white text-xs rounded-xl">Concluir</button></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SEÇÃO OCULTA EXCLUSIVA PARA IMPRESSÃO DA PORTARIA -->
+    <div id="print-section" class="hidden">
+      <div class="text-center border-b pb-4 mb-4">
+        <h1 class="text-2xl font-bold">CondoSpace - Residencial Vista do Parque</h1>
+        <h2 class="text-lg font-semibold">Lista de Convidados da Portaria</h2>
+      </div>
+      <div class="mb-4 text-sm" v-if="printData">
+        <p><strong>Espaço:</strong> {{ printData.spaceName }}</p>
+        <p><strong>Data:</strong> {{ formatDate(printData.date) }} | <strong>Turno:</strong> {{ printData.shift }}</p>
+        <p><strong>Morador Responsável:</strong> {{ printData.residentName }} ({{ printData.unit }})</p>
+      </div>
+      <table class="w-full text-left border-collapse border text-sm" v-if="printData">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border p-2">#</th>
+            <th class="border p-2">Nome do Convidado</th>
+            <th class="border p-2">Assinatura / Liberação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(g, index) in printData.guests" :key="index">
+            <td class="border p-2">{{ index + 1 }}</td>
+            <td class="border p-2 font-bold">{{ g.name }}</td>
+            <td class="border p-2">___________________________</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB7WzZ1HxIJSvQKYsbJFI70HPnMaTzrzQ8",
+      authDomain: "condospace.firebaseapp.com",
+      projectId: "condospace",
+      storageBucket: "condospace.firebasestorage.app",
+      messagingSenderId: "458674343880",
+      appId: "1:458674343880:web:0a113f3ae22f8d55157afd"
+    };
+
+    // Inicializa o Firebase e expõe a instância globalmente
+    window.firebaseApp = initializeApp(firebaseConfig);
+  </script>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          currentUser: null,
+          authMode: 'login',
+          authAlert: { text: '', type: '' },
+          adminTab: 'dashboard',
+          showNotifications: false,
+          
+          showReservationModal: false,
+          showGuestModal: false,
+          showUserChangePasswordModal: false,
+          showAdminResetPasswordModal: false,
+          showRegulationModal: false,
+          
+          selectedSpace: null,
+          activeReservationForGuests: null,
+          targetUserForPassword: null,
+          printData: null,
+          
+          loginForm: { email: '', password: '' },
+          registerForm: { name: '', unit: '', email: '', password: '' },
+          form: { date: '', shift: '', termsAccepted: false },
+          adminBookingForm: { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' },
+          userPasswordForm: { current: '', new: '' },
+          newGuestName: '',
+
+          filters: { period: 'month', space: 'all' },
+
+          userList: [
+            { id: 1, name: 'Síndico Geral', email: 'admin@condo.com', password: '123', role: 'admin', unit: '', status: 'Aprovado' },
+            { id: 2, name: 'Alessandro Câmara', email: 'morador@condo.com', password: '123', role: 'resident', unit: 'Bloco B - Apto 402', status: 'Aprovado' },
+            { id: 3, name: 'Portaria Principal', email: 'portaria@condo.com', password: '123', role: 'doorman', unit: '', status: 'Aprovado' }
+          ],
+
+          spaces: [
+            { id: 1, name: 'Salão de Festas Principal', description: 'Ambiente climatizado, freezer, som integrado e mesas.', capacity: 80, fee: 250.00, scheduleType: 'Diária Completa', image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=600&q=80' },
+            { id: 2, name: 'Churrasqueira 1 (Visão Quadra)', description: 'Churrasqueira a carvão e vista para a quadra.', capacity: 35, fee: 100.00, scheduleType: 'Por Turnos', image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80' },
+            { id: 3, name: 'Churrasqueira 2 (Visão Salão)', description: 'Churrasqueira integrada à esplanada.', capacity: 35, fee: 100.00, scheduleType: 'Por Turnos', image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80' }
+          ],
+
+          reservations: [
+            { id: 101, userId: 2, residentName: 'Alessandro Câmara', unit: 'Bloco B - Apto 402', spaceName: 'Salão de Festas Principal', date: '2026-10-12', shift: 'Diária Completa (08h às 22h)', fee: 250.00, guests: [{ name: 'Carlos Eduardo' }] },
+            { id: 102, userId: 2, residentName: 'Alessandro Câmara', unit: 'Bloco B - Apto 402', spaceName: 'Churrasqueira 1 (Visão Quadra)', date: '2026-10-18', shift: 'Turno Almoço (10h às 16h)', fee: 100.00, guests: [{ name: 'Fernanda Rocha' }] }
+          ]
+        };
+      },
+      computed: {
+        myReservations() {
+          if (!this.currentUser) return [];
+          return this.reservations.filter(r => r.userId === this.currentUser.id);
+        },
+        pendingUsersList() {
+          return this.userList.filter(u => u.status === 'Pendente');
+        },
+        pendingUsersCount() {
+          return this.pendingUsersList.length;
+        },
+        filteredReservations() {
+          return this.reservations.filter(r => {
+            let matchPeriod = true;
+            if (this.filters.period === 'today') matchPeriod = r.date === '2026-10-12';
+            else if (this.filters.period === 'month') matchPeriod = r.date.startsWith('2026-10');
+            else if (this.filters.period === 'year') matchPeriod = r.date.startsWith('2026');
+
+            let matchSpace = true;
+            if (this.filters.space !== 'all') matchSpace = r.spaceName === this.filters.space;
+
+            return matchPeriod && matchSpace;
+          });
+        },
+        filteredRevenue() {
+          return this.filteredReservations.reduce((acc, curr) => acc + curr.fee, 0);
+        },
+        mostPopularSpaceName() {
+          if (this.filteredReservations.length === 0) return 'Nenhum agendamento';
+          const counts = {};
+          this.filteredReservations.forEach(r => counts[r.spaceName] = (counts[r.spaceName] || 0) + 1);
+          return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+        },
+        availableShifts() {
+          if (!this.selectedSpace || !this.form.date) return [];
+
+          let allShifts = [];
+          if (this.selectedSpace.scheduleType === 'Diária Completa') {
+            allShifts = [{ name: 'Diária Completa (08h às 22h)' }];
+          } else {
+            allShifts = [
+              { name: 'Turno Almoço (10h às 16h)' },
+              { name: 'Turno Jantar (17h às 23h)' }
+            ];
+          }
+
+          return allShifts.map(shift => {
+            const takenRes = this.reservations.find(r => r.spaceName === this.selectedSpace.name && r.date === this.form.date && r.shift === shift.name);
+            return {
+              name: shift.name,
+              isTaken: !!takenRes,
+              takenBy: takenRes ? `${takenRes.residentName} (${takenRes.unit})` : ''
+            };
+          });
+        }
+      },
+      mounted() {
+        this.refreshIcons();
+      },
+      updated() {
+        this.refreshIcons();
+      },
+      methods: {
+        refreshIcons() {
+          this.$nextTick(() => {
+            if (window.lucide) window.lucide.createIcons();
+          });
+        },
+        clearAlert() {
+          this.authAlert = { text: '', type: '' };
+        },
+        resetFilters() {
+          this.filters.period = 'all';
+          this.filters.space = 'all';
+        },
+        handleLogin() {
+          const user = this.userList.find(u => u.email.toLowerCase() === this.loginForm.email.toLowerCase() && u.password === this.loginForm.password);
+          if (!user) {
+            this.authAlert = { text: 'E-mail ou senha incorretos.', type: 'error' };
+            return;
+          }
+          if (user.status === 'Pendente') {
+            this.authAlert = { text: 'Seu cadastro aguarda aprovação.', type: 'error' };
+            return;
+          }
+          this.currentUser = user;
+          this.loginForm = { email: '', password: '' };
+          this.clearAlert();
+        },
+        handleRegister() {
+          const newUser = { id: Date.now(), name: this.registerForm.name, email: this.registerForm.email, password: this.registerForm.password, unit: this.registerForm.unit, role: 'resident', status: 'Pendente' };
+          this.userList.push(newUser);
+          this.authMode = 'login';
+          this.authAlert = { text: 'Solicitação registrada com sucesso!', type: 'success' };
+        },
+        logout() {
+          this.currentUser = null;
+          this.authMode = 'login';
+        },
+        getRoleName(role) {
+          if (role === 'admin') return 'Administração';
+          if (role === 'doorman') return 'Portaria';
+          return 'Morador';
+        },
+        getRoleBadgeClass(role) {
+          if (role === 'admin') return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+          if (role === 'doorman') return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+          return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        },
+        approveUser(user) {
+          user.status = 'Aprovado';
+        },
+        deleteUser(user) {
+          if (confirm(`Excluir ${user.name}?`)) this.userList = this.userList.filter(u => u.id !== user.id);
+        },
+        deleteReservation(id) {
+          if (confirm('Deseja excluir esta reserva em caso de desistência do morador?')) {
+            this.reservations = this.reservations.filter(r => r.id !== id);
+          }
+        },
+        handleAdminCreateReservation() {
+          const space = this.spaces.find(s => s.id === this.adminBookingForm.spaceId);
+          const newRes = {
+            id: Date.now(),
+            userId: 999,
+            residentName: this.adminBookingForm.residentName,
+            unit: this.adminBookingForm.unit,
+            spaceName: space.name,
+            date: this.adminBookingForm.date,
+            shift: this.adminBookingForm.shift,
+            fee: space.fee,
+            guests: []
+          };
+          this.reservations.unshift(newRes);
+          alert('Reserva efetuada em nome do morador com sucesso!');
+          this.adminBookingForm = { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' };
+          this.adminTab = 'dashboard';
+        },
+        formatDate(dateStr) {
+          if (!dateStr) return '';
+          const [y, m, d] = dateStr.split('-');
+          return `${d}/${m}/${y}`;
+        },
+        selectSpaceAndOpen(space) {
+          this.selectedSpace = space;
+          this.form.shift = '';
+          this.showReservationModal = true;
+        },
+        openReservationModal() {
+          this.selectedSpace = this.spaces[0];
+          this.form.shift = '';
+          this.showReservationModal = true;
+        },
+        confirmReservation() {
+          if (!this.form.termsAccepted || !this.form.shift) return;
+
+          const newRes = {
+            id: Date.now(),
+            userId: this.currentUser.id,
+            residentName: this.currentUser.name,
+            unit: this.currentUser.unit,
+            spaceName: this.selectedSpace.name,
+            date: this.form.date,
+            shift: this.form.shift,
+            fee: this.selectedSpace.fee,
+            guests: []
+          };
+
+          this.reservations.unshift(newRes);
+          this.showReservationModal = false;
+          this.form = { date: '', shift: '', termsAccepted: false };
+        },
+        openGuestListModal(res) {
+          this.activeReservationForGuests = res;
+          this.showGuestModal = true;
+        },
+        addGuest() {
+          if (!this.newGuestName.trim()) return;
+          this.activeReservationForGuests.guests.push({ name: this.newGuestName.trim() });
+          this.newGuestName = '';
+        },
+        filteredGuests(guests) {
+          if (!this.guestSearch) return guests;
+          return guests.filter(g => g.name.toLowerCase().includes(this.guestSearch.toLowerCase()));
+        },
+        printGuestList(res) {
+          this.printData = res;
+          this.$nextTick(() => {
+            window.print();
+          });
+        },
+        exportCSV() {
+          let csv = 'Morador;Unidade;Espaço;Data;Turno;Valor_Taxa\n';
+          this.filteredReservations.forEach(item => {
+            csv += `${item.residentName};${item.unit};${item.spaceName};${item.date};${item.shift};${item.fee}\n`;
+          });
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.setAttribute('download', `relatorio_condospace_${Date.now()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
