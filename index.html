@@ -720,6 +720,14 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+      createUserWithEmailAndPassword, signOut
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
+      updateDoc, deleteDoc, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyB7WzZ1HxIJSvQKYsbJFI70HPnMaTzrzQ8",
@@ -730,12 +738,18 @@
       appId: "1:458674343880:web:0a113f3ae22f8d55157afd"
     };
 
-    // Inicializa o Firebase e expõe a instância globalmente
-    window.firebaseApp = initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
+
+    window.fb = {
+      auth: getAuth(app), db: getFirestore(app),
+      onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+      collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot
+    };
   </script>
 
-  <script>
+  <script type="module">
     const { createApp } = Vue;
+    const fb = window.fb;
 
     createApp({
       data() {
@@ -766,11 +780,9 @@
 
           filters: { period: 'month', space: 'all' },
 
-          userList: [
-            { id: 1, name: 'Síndico Geral', email: 'admin@condo.com', password: '123', role: 'admin', unit: '', status: 'Aprovado' },
-            { id: 2, name: 'Alessandro Câmara', email: 'morador@condo.com', password: '123', role: 'resident', unit: 'Bloco B - Apto 402', status: 'Aprovado' },
-            { id: 3, name: 'Portaria Principal', email: 'portaria@condo.com', password: '123', role: 'doorman', unit: '', status: 'Aprovado' }
-          ],
+          userList: [],
+          unsubs: [],
+          authLock: false,
 
           spaces: [
             { id: 1, name: 'Salão de Festas Principal', description: 'Ambiente climatizado, freezer, som integrado e mesas.', capacity: 80, fee: 250.00, scheduleType: 'Diária Completa', image: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=600&q=80' },
@@ -778,10 +790,7 @@
             { id: 3, name: 'Churrasqueira 2 (Visão Salão)', description: 'Churrasqueira integrada à esplanada.', capacity: 35, fee: 100.00, scheduleType: 'Por Turnos', image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80' }
           ],
 
-          reservations: [
-            { id: 101, userId: 2, residentName: 'Alessandro Câmara', unit: 'Bloco B - Apto 402', spaceName: 'Salão de Festas Principal', date: '2026-10-12', shift: 'Diária Completa (08h às 22h)', fee: 250.00, guests: [{ name: 'Carlos Eduardo' }] },
-            { id: 102, userId: 2, residentName: 'Alessandro Câmara', unit: 'Bloco B - Apto 402', spaceName: 'Churrasqueira 1 (Visão Quadra)', date: '2026-10-18', shift: 'Turno Almoço (10h às 16h)', fee: 100.00, guests: [{ name: 'Fernanda Rocha' }] }
-          ]
+          reservations: []
         };
       },
       computed: {
@@ -842,6 +851,15 @@
       },
       mounted() {
         this.refreshIcons();
+        fb.onAuthStateChanged(fb.auth, async (fbUser) => {
+          if (this.authLock) return;
+          if (!fbUser) {
+            this.stopListeners();
+            this.currentUser = null;
+            return;
+          }
+          await this.loadSession(fbUser);
+        });
       },
       updated() {
         this.refreshIcons();
@@ -859,28 +877,107 @@
           this.filters.period = 'all';
           this.filters.space = 'all';
         },
-        handleLogin() {
-          const user = this.userList.find(u => u.email.toLowerCase() === this.loginForm.email.toLowerCase() && u.password === this.loginForm.password);
-          if (!user) {
-            this.authAlert = { text: 'E-mail ou senha incorretos.', type: 'error' };
-            return;
+        authError(e) {
+          const map = {
+            'auth/invalid-credential': 'E-mail ou senha incorretos.',
+            'auth/wrong-password': 'E-mail ou senha incorretos.',
+            'auth/user-not-found': 'E-mail ou senha incorretos.',
+            'auth/invalid-email': 'E-mail inválido.',
+            'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
+            'auth/weak-password': 'A senha deve ter ao menos 6 caracteres.',
+            'auth/too-many-requests': 'Muitas tentativas. Aguarde e tente novamente.',
+            'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.'
+          };
+          return map[e.code] || 'Não foi possível concluir a operação.';
+        },
+        fbError(e) {
+          console.error(e);
+          alert(e.code === 'permission-denied'
+            ? 'Sem permissão para realizar esta operação.'
+            : 'Erro ao salvar os dados. Tente novamente.');
+        },
+        async loadSession(fbUser) {
+          try {
+            const snap = await fb.getDoc(fb.doc(fb.db, 'users', fbUser.uid));
+            const profile = snap.exists() ? snap.data() : null;
+            if (!profile || profile.status === 'Pendente') {
+              this.authAlert = {
+                text: profile ? 'Seu cadastro aguarda aprovação.' : 'Cadastro não encontrado.',
+                type: 'error'
+              };
+              await fb.signOut(fb.auth);
+              return;
+            }
+            this.currentUser = { id: fbUser.uid, ...profile };
+            this.startListeners();
+          } catch (e) {
+            this.authAlert = { text: this.authError(e), type: 'error' };
+            await fb.signOut(fb.auth);
           }
-          if (user.status === 'Pendente') {
-            this.authAlert = { text: 'Seu cadastro aguarda aprovação.', type: 'error' };
-            return;
+        },
+        startListeners() {
+          this.stopListeners();
+          const onError = (e) => console.error(e);
+          this.unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'reservations'), (snap) => {
+            this.reservations = snap.docs
+              .map(d => ({ id: d.id, guests: [], ...d.data() }))
+              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            if (this.activeReservationForGuests) {
+              const current = this.reservations.find(r => r.id === this.activeReservationForGuests.id);
+              this.activeReservationForGuests = current || null;
+              if (!current) this.showGuestModal = false;
+            }
+          }, onError));
+          if (this.currentUser.role === 'admin') {
+            this.unsubs.push(fb.onSnapshot(fb.collection(fb.db, 'users'), (snap) => {
+              this.userList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            }, onError));
           }
-          this.currentUser = user;
-          this.loginForm = { email: '', password: '' };
+        },
+        stopListeners() {
+          this.unsubs.forEach(unsub => unsub());
+          this.unsubs = [];
+          this.reservations = [];
+          this.userList = [];
+        },
+        async handleLogin() {
           this.clearAlert();
+          try {
+            await fb.signInWithEmailAndPassword(fb.auth, this.loginForm.email.trim(), this.loginForm.password);
+            this.loginForm = { email: '', password: '' };
+          } catch (e) {
+            this.authAlert = { text: this.authError(e), type: 'error' };
+          }
         },
-        handleRegister() {
-          const newUser = { id: Date.now(), name: this.registerForm.name, email: this.registerForm.email, password: this.registerForm.password, unit: this.registerForm.unit, role: 'resident', status: 'Pendente' };
-          this.userList.push(newUser);
-          this.authMode = 'login';
-          this.authAlert = { text: 'Solicitação registrada com sucesso!', type: 'success' };
+        async handleRegister() {
+          this.clearAlert();
+          this.authLock = true;
+          try {
+            const f = this.registerForm;
+            const cred = await fb.createUserWithEmailAndPassword(fb.auth, f.email.trim(), f.password);
+            // O primeiro cadastro do sistema torna-se o administrador (já aprovado)
+            const isFirst = (await fb.getDocs(fb.collection(fb.db, 'users'))).empty;
+            await fb.setDoc(fb.doc(fb.db, 'users', cred.user.uid), {
+              name: f.name, email: f.email.trim(), unit: f.unit,
+              role: isFirst ? 'admin' : 'resident',
+              status: isFirst ? 'Aprovado' : 'Pendente',
+              createdAt: Date.now()
+            });
+            await fb.signOut(fb.auth);
+            this.registerForm = { name: '', unit: '', email: '', password: '' };
+            this.authMode = 'login';
+            this.authAlert = {
+              text: isFirst ? 'Conta de administrador criada. Faça login.' : 'Solicitação registrada com sucesso!',
+              type: 'success'
+            };
+          } catch (e) {
+            this.authAlert = { text: this.authError(e), type: 'error' };
+          } finally {
+            this.authLock = false;
+          }
         },
-        logout() {
-          this.currentUser = null;
+        async logout() {
+          await fb.signOut(fb.auth);
           this.authMode = 'login';
         },
         getRoleName(role) {
@@ -893,34 +990,41 @@
           if (role === 'doorman') return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
           return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
         },
-        approveUser(user) {
-          user.status = 'Aprovado';
+        async approveUser(user) {
+          try {
+            await fb.updateDoc(fb.doc(fb.db, 'users', user.id), { status: 'Aprovado' });
+          } catch (e) { this.fbError(e); }
         },
-        deleteUser(user) {
-          if (confirm(`Excluir ${user.name}?`)) this.userList = this.userList.filter(u => u.id !== user.id);
+        async deleteUser(user) {
+          if (!confirm(`Excluir ${user.name}?`)) return;
+          try {
+            await fb.deleteDoc(fb.doc(fb.db, 'users', user.id));
+          } catch (e) { this.fbError(e); }
         },
-        deleteReservation(id) {
-          if (confirm('Deseja excluir esta reserva em caso de desistência do morador?')) {
-            this.reservations = this.reservations.filter(r => r.id !== id);
-          }
+        async deleteReservation(id) {
+          if (!confirm('Deseja excluir esta reserva em caso de desistência do morador?')) return;
+          try {
+            await fb.deleteDoc(fb.doc(fb.db, 'reservations', id));
+          } catch (e) { this.fbError(e); }
         },
-        handleAdminCreateReservation() {
+        async handleAdminCreateReservation() {
           const space = this.spaces.find(s => s.id === this.adminBookingForm.spaceId);
-          const newRes = {
-            id: Date.now(),
-            userId: 999,
-            residentName: this.adminBookingForm.residentName,
-            unit: this.adminBookingForm.unit,
-            spaceName: space.name,
-            date: this.adminBookingForm.date,
-            shift: this.adminBookingForm.shift,
-            fee: space.fee,
-            guests: []
-          };
-          this.reservations.unshift(newRes);
-          alert('Reserva efetuada em nome do morador com sucesso!');
-          this.adminBookingForm = { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' };
-          this.adminTab = 'dashboard';
+          try {
+            await fb.addDoc(fb.collection(fb.db, 'reservations'), {
+              userId: 999,
+              residentName: this.adminBookingForm.residentName,
+              unit: this.adminBookingForm.unit,
+              spaceName: space.name,
+              date: this.adminBookingForm.date,
+              shift: this.adminBookingForm.shift,
+              fee: space.fee,
+              guests: [],
+              createdAt: Date.now()
+            });
+            alert('Reserva efetuada em nome do morador com sucesso!');
+            this.adminBookingForm = { residentName: '', unit: '', spaceId: 1, date: '', shift: 'Diária Completa (08h às 22h)' };
+            this.adminTab = 'dashboard';
+          } catch (e) { this.fbError(e); }
         },
         formatDate(dateStr) {
           if (!dateStr) return '';
@@ -937,33 +1041,38 @@
           this.form.shift = '';
           this.showReservationModal = true;
         },
-        confirmReservation() {
+        async confirmReservation() {
           if (!this.form.termsAccepted || !this.form.shift) return;
-
-          const newRes = {
-            id: Date.now(),
-            userId: this.currentUser.id,
-            residentName: this.currentUser.name,
-            unit: this.currentUser.unit,
-            spaceName: this.selectedSpace.name,
-            date: this.form.date,
-            shift: this.form.shift,
-            fee: this.selectedSpace.fee,
-            guests: []
-          };
-
-          this.reservations.unshift(newRes);
-          this.showReservationModal = false;
-          this.form = { date: '', shift: '', termsAccepted: false };
+          try {
+            await fb.addDoc(fb.collection(fb.db, 'reservations'), {
+              userId: this.currentUser.id,
+              residentName: this.currentUser.name,
+              unit: this.currentUser.unit || '',
+              spaceName: this.selectedSpace.name,
+              date: this.form.date,
+              shift: this.form.shift,
+              fee: this.selectedSpace.fee,
+              guests: [],
+              createdAt: Date.now()
+            });
+            this.showReservationModal = false;
+            this.form = { date: '', shift: '', termsAccepted: false };
+          } catch (e) { this.fbError(e); }
         },
         openGuestListModal(res) {
           this.activeReservationForGuests = res;
           this.showGuestModal = true;
         },
-        addGuest() {
-          if (!this.newGuestName.trim()) return;
-          this.activeReservationForGuests.guests.push({ name: this.newGuestName.trim() });
-          this.newGuestName = '';
+        async addGuest() {
+          const name = this.newGuestName.trim();
+          if (!name) return;
+          const res = this.activeReservationForGuests;
+          try {
+            await fb.updateDoc(fb.doc(fb.db, 'reservations', res.id), {
+              guests: [...(res.guests || []), { name }]
+            });
+            this.newGuestName = '';
+          } catch (e) { this.fbError(e); }
         },
         filteredGuests(guests) {
           if (!this.guestSearch) return guests;
